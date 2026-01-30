@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "73f88bdf-2e82-4231-95c6-1dd3266fcc4a"
+      }
+    },
+    "android": {
+      "package": "com.hsmith1425.weightresetai"
+    }
+  }
+}

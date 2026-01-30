@@ -1,0 +1,795 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import type { UnlockedAchievement } from '../../constants/achievements';
+import { getAchievements } from '../../lib/achievements';
+
+const COLORS = {
+  bg: '#FFFFFF',
+  text: '#111827',
+  muted: '#6B7280',
+  border: '#E5E7EB',
+  orange: '#FF6A00',
+  orangeSoft: '#FFE6D5',
+};
+
+const STORAGE_NOTIF_ENABLED = 'wr_notif_enabled_v1';
+const STORAGE_NOTIF_HOUR = 'wr_notif_hour_v1';
+const STORAGE_NOTIF_MIN = 'wr_notif_min_v1';
+const STORAGE_NOTIF_LAST_ID = 'wr_notif_last_id_v1';
+
+const STORAGE_SMART_ENABLED = 'wr_notif_smart_enabled_v1';
+const STORAGE_SMART_HOUR = 'wr_notif_smart_hour_v1';
+const STORAGE_SMART_MIN = 'wr_notif_smart_min_v1';
+const STORAGE_SMART_LAST_ID = 'wr_notif_smart_last_id_v1';
+
+const STORAGE_MODE = 'wr_mode_v1';
+const STORAGE_PROFILE = 'wr_profile_v1';
+
+type UserProfile = {
+  nombre?: string;
+  edad?: number;
+  sexo?: 'hombre' | 'mujer' | 'otro' | string;
+  altura_cm?: number;
+  peso_kg?: number;
+};
+type PlanMode = 'agresiva' | 'balance' | 'mantenimiento';
+
+const MODE_LABEL: Record<PlanMode, string> = {
+  agresiva: 'Agresiva',
+  balance: 'Balance',
+  mantenimiento: 'Mantenimiento',
+};
+
+const CHANNEL_ID = 'daily-reminders';
+
+function normalizeMode(raw: any): PlanMode {
+  const s = String(raw ?? '').toLowerCase().trim();
+  if (s === 'agresiva' || s === 'aggressive' || s.startsWith('agre')) return 'agresiva';
+  if (s === 'balance' || s === 'balanced' || s.startsWith('bal')) return 'balance';
+  if (s === 'mantenimiento' || s === 'maintenance' || s.startsWith('mant')) return 'mantenimiento';
+  // Fallback
+  return 'balance';
+}
+
+function normalizeProfile(raw: any): UserProfile | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  // Support multiple possible key names from onboarding/older versions
+  const nombreRaw =
+    raw.nombre ??
+    raw.name ??
+    raw.firstName ??
+    raw.first_name ??
+    raw.fullName ??
+    raw.full_name;
+
+  const edadRaw = raw.edad ?? raw.age;
+  const sexoRaw = raw.sexo ?? raw.gender ?? raw.sex;
+
+  const alturaRaw =
+    raw.altura_cm ??
+    raw.altura ??
+    raw.height_cm ??
+    raw.heightCm ??
+    raw.height;
+
+  const pesoRaw =
+    raw.peso_kg ??
+    raw.peso ??
+    raw.weight_kg ??
+    raw.weightKg ??
+    raw.weight;
+
+  const nombre = String(nombreRaw ?? '').trim();
+  const edad = Number(edadRaw);
+  const altura_cm = Number(alturaRaw);
+  const peso_kg = Number(pesoRaw);
+
+  const sexo = String(sexoRaw ?? '').trim();
+
+  const out: UserProfile = {};
+  if (nombre) out.nombre = nombre;
+  if (!Number.isNaN(edad) && edad > 0) out.edad = edad;
+  if (sexo) out.sexo = sexo;
+  if (!Number.isNaN(altura_cm) && altura_cm > 0) out.altura_cm = altura_cm;
+  if (!Number.isNaN(peso_kg) && peso_kg > 0) out.peso_kg = peso_kg;
+
+  return Object.keys(out).length ? out : null;
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function fmtTime(hour: number, minute: number) {
+  const h12 = ((hour + 11) % 12) + 1;
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const mm = String(minute).padStart(2, '0');
+  return `${h12}:${mm} ${ampm}`;
+}
+
+function isoDateKey(d: Date = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+async function ensureAndroidChannel() {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+      name: 'Recordatorios diarios',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      sound: 'default',
+    });
+  } catch {
+    // ignore
+  }
+}
+
+async function ensurePermission(): Promise<boolean> {
+  const existing = await Notifications.getPermissionsAsync();
+  if (existing.granted) return true;
+  const req = await Notifications.requestPermissionsAsync();
+  return !!req.granted;
+}
+
+async function loadSettings() {
+  const [en, h, m, smartEn, smartH, smartM] = await Promise.all([
+    AsyncStorage.getItem(STORAGE_NOTIF_ENABLED),
+    AsyncStorage.getItem(STORAGE_NOTIF_HOUR),
+    AsyncStorage.getItem(STORAGE_NOTIF_MIN),
+    AsyncStorage.getItem(STORAGE_SMART_ENABLED),
+    AsyncStorage.getItem(STORAGE_SMART_HOUR),
+    AsyncStorage.getItem(STORAGE_SMART_MIN),
+  ]);
+
+  return {
+    enabled: en === '1',
+    hour: clamp(h ? Number(h) : 20, 0, 23),
+    minute: clamp(m ? Number(m) : 0, 0, 59),
+    smartEnabled: smartEn === '1',
+    smartHour: clamp(smartH ? Number(smartH) : 15, 0, 23),
+    smartMinute: clamp(smartM ? Number(smartM) : 0, 0, 59),
+  };
+}
+
+async function saveSettings(
+  enabled: boolean,
+  hour: number,
+  minute: number,
+  smartEnabled: boolean,
+  smartHour: number,
+  smartMinute: number
+) {
+  await Promise.all([
+    AsyncStorage.setItem(STORAGE_NOTIF_ENABLED, enabled ? '1' : '0'),
+    AsyncStorage.setItem(STORAGE_NOTIF_HOUR, String(hour)),
+    AsyncStorage.setItem(STORAGE_NOTIF_MIN, String(minute)),
+    AsyncStorage.setItem(STORAGE_SMART_ENABLED, smartEnabled ? '1' : '0'),
+    AsyncStorage.setItem(STORAGE_SMART_HOUR, String(smartHour)),
+    AsyncStorage.setItem(STORAGE_SMART_MIN, String(smartMinute)),
+  ]);
+}
+
+
+async function cancelAllScheduled() {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {
+    // ignore
+  }
+}
+
+async function cancelDailyLast() {
+  try {
+    const last = await AsyncStorage.getItem(STORAGE_NOTIF_LAST_ID);
+    if (last) {
+      await Notifications.cancelScheduledNotificationAsync(last);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function scheduleDaily(hour: number, minute: number) {
+  await ensureAndroidChannel();
+  await cancelDailyLast();
+
+  const trigger =
+    Platform.OS === 'android'
+      ? ({ type: 'daily', hour, minute, channelId: CHANNEL_ID } as any)
+      : ({ type: 'calendar', hour, minute, repeats: true } as any);
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Cierra tu día 🌙',
+      body: 'Tómate 30 segundos para tu check-in.',
+      sound: 'default',
+    },
+    trigger,
+  });
+  await AsyncStorage.setItem(STORAGE_NOTIF_LAST_ID, id);
+}
+
+async function getCheckinForDate(dateKey: string): Promise<any | null> {
+  try {
+    const raw = await AsyncStorage.getItem('wr_checkin_v1_' + dateKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clamp01(n: number) {
+  return Math.max(0, Math.min(100, n));
+}
+
+function computeCravingsRisk(latest: any, yesterday: any | null) {
+  const sueno = Number(latest?.sueno_horas ?? latest?.sleepHours);
+  const estres = Number(latest?.estres ?? latest?.stress);
+  const antojos = Number(latest?.antojos ?? latest?.cravings);
+  const mov = Number(latest?.movimiento_min ?? latest?.movementMin);
+
+  let risk = 35;
+  if (!Number.isNaN(sueno) && sueno < 7) risk += 18;
+  if (!Number.isNaN(estres) && estres >= 4) risk += 18;
+  if (!Number.isNaN(mov) && mov < 20) risk += 12;
+  if (!Number.isNaN(antojos) && antojos >= 2) risk += 20;
+
+  const yAnt = Number(yesterday?.antojos ?? yesterday?.cravings);
+  if (yesterday && !Number.isNaN(yAnt) && yAnt >= 2) risk += 8;
+
+  risk = clamp01(Math.round(risk));
+  const label = risk >= 75 ? 'alto' : risk >= 55 ? 'medio' : 'bajo';
+
+  // Pick a suggested target
+  let target: 'sleep' | 'move' | 'stress' | 'cravings' = 'move';
+  if (!Number.isNaN(sueno) && sueno < 7) target = 'sleep';
+  else if (!Number.isNaN(estres) && estres >= 4) target = 'stress';
+  else if (!Number.isNaN(antojos) && antojos >= 2) target = 'cravings';
+  else if (!Number.isNaN(mov) && mov < 20) target = 'move';
+
+  return { risk, label, target };
+}
+
+async function cancelSmartLast() {
+  try {
+    const last = await AsyncStorage.getItem(STORAGE_SMART_LAST_ID);
+    if (last) {
+      await Notifications.cancelScheduledNotificationAsync(last);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function scheduleSmartTomorrow(hour: number, minute: number) {
+  await ensureAndroidChannel();
+
+  const today = new Date();
+  const todayKey = isoDateKey(today);
+  const latest = await getCheckinForDate(todayKey);
+  if (!latest) return { scheduled: false as const, reason: 'no-checkin-today' as const };
+
+  const y = new Date(today);
+  y.setDate(y.getDate() - 1);
+  const yesterday = await getCheckinForDate(isoDateKey(y));
+
+  const { risk, label, target } = computeCravingsRisk(latest, yesterday);
+
+  // Anti-spam: only schedule if medium+ risk
+  if (risk < 55) return { scheduled: false as const, reason: 'risk-low' as const, risk, label, target };
+
+  // One smart notification at a time
+  await cancelSmartLast();
+
+  const tmr = new Date(today);
+  tmr.setDate(tmr.getDate() + 1);
+
+  const title = label === 'alto' ? '⚠️ Antojos mañana: alto' : '🟡 Antojos mañana: medio';
+  const body =
+    target === 'sleep'
+      ? 'Hoy: prioriza dormir +45 min. Mañana te ayudará con antojos.'
+      : target === 'stress'
+        ? 'Estrés alto: respira 3 min + caminata corta. Te ayudará mañana.'
+        : target === 'cravings'
+          ? 'Plan rápido: proteína + fibra en la próxima comida.'
+          : 'Haz 10–15 min de caminata después de comer.';
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: 'default',
+    },
+    trigger:
+      Platform.OS === 'android'
+        ? ({
+            type: 'date',
+            date: new Date(tmr.getFullYear(), tmr.getMonth(), tmr.getDate(), hour, minute, 0),
+            channelId: CHANNEL_ID,
+          } as any)
+        : ({
+            type: 'calendar',
+            year: tmr.getFullYear(),
+            month: tmr.getMonth() + 1,
+            day: tmr.getDate(),
+            hour,
+            minute,
+            repeats: false,
+          } as any),
+  });
+
+  await AsyncStorage.setItem(STORAGE_SMART_LAST_ID, id);
+  return { scheduled: true as const, risk, label, target, id };
+}
+
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: active ? COLORS.orange : COLORS.border,
+        backgroundColor: active ? COLORS.orangeSoft : '#fff',
+      }}
+    >
+      <Text style={{ fontWeight: '900', color: COLORS.text }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export default function PerfilScreen() {
+  const [enabled, setEnabled] = useState(false);
+  const [hour, setHour] = useState(20);
+  const [minute, setMinute] = useState(0);
+
+  const [mode, setMode] = useState<PlanMode>('balance');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  const [smartEnabled, setSmartEnabled] = useState(false);
+  const [smartHour, setSmartHour] = useState(15);
+  const [smartMinute, setSmartMinute] = useState(0);
+  const [smartStatus, setSmartStatus] = useState<string>('');
+
+  const [scheduledCount, setScheduledCount] = useState<number>(0);
+  const [achievements, setAchievements] = useState<UnlockedAchievement[]>([]);
+
+  const timeLabel = useMemo(() => fmtTime(hour, minute), [hour, minute]);
+
+  const refreshScheduledCount = useCallback(async () => {
+    try {
+      const all = await Notifications.getAllScheduledNotificationsAsync();
+      setScheduledCount(all.length);
+    } catch {
+      setScheduledCount(0);
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    const s = await loadSettings();
+    setEnabled(s.enabled);
+    setHour(s.hour);
+    setMinute(s.minute);
+    setSmartEnabled(s.smartEnabled);
+    setSmartHour(s.smartHour);
+    setSmartMinute(s.smartMinute);
+    await refreshScheduledCount();
+
+    // Normalize and load STORAGE_MODE
+    try {
+      const rawMode = await AsyncStorage.getItem(STORAGE_MODE);
+      const nextMode = normalizeMode(rawMode);
+      setMode(nextMode);
+      // Persist normalized mode so other screens (Coach/Plan) read a clean value
+      await AsyncStorage.setItem(STORAGE_MODE, nextMode);
+    } catch {
+      setMode('balance');
+    }
+
+    // Normalize and load STORAGE_PROFILE
+    try {
+      const rawProfile = await AsyncStorage.getItem(STORAGE_PROFILE);
+      if (!rawProfile) {
+        setProfile(null);
+      } else {
+        const parsed = JSON.parse(rawProfile);
+        const normalized = normalizeProfile(parsed);
+        setProfile(normalized);
+
+        // Persist normalized profile so Coach can reliably read `nombre` + fields
+        // (and to migrate older key names like `name` -> `nombre`).
+        const nextRaw = normalized ? JSON.stringify(normalized) : '';
+        if (normalized) {
+          await AsyncStorage.setItem(STORAGE_PROFILE, nextRaw);
+        } else {
+          // If it was garbage/empty, clear it.
+          await AsyncStorage.removeItem(STORAGE_PROFILE);
+        }
+      }
+    } catch {
+      setProfile(null);
+    }
+
+    try {
+      const list = await getAchievements();
+      setAchievements(Array.isArray(list) ? (list as UnlockedAchievement[]) : []);
+    } catch {
+      setAchievements([]);
+    }
+  }, [refreshScheduledCount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      return () => {};
+    }, [load])
+  );
+
+  const apply = useCallback(
+    async (nextEnabled: boolean, nextHour: number, nextMinute: number, nextSmartEnabled: boolean, nextSmartHour: number, nextSmartMinute: number) => {
+      await saveSettings(nextEnabled, nextHour, nextMinute, nextSmartEnabled, nextSmartHour, nextSmartMinute);
+
+      if (!nextEnabled) {
+        // Only cancel the daily reminder; smart reminders are managed separately
+        // (we already use cancelAllScheduled in scheduleDaily, so keep daily off by leaving it unscheduled)
+      }
+
+      if (!Device.isDevice) {
+        // simulador puede fallar, pero igual intentamos
+      }
+
+      const ok = await ensurePermission();
+      if (!ok) {
+        Alert.alert('Permiso denegado', 'Activa las notificaciones en Ajustes para recibir recordatorios.');
+        await saveSettings(false, nextHour, nextMinute, nextSmartEnabled, nextSmartHour, nextSmartMinute);
+        setEnabled(false);
+        await cancelDailyLast();
+        await cancelSmartLast();
+        await refreshScheduledCount();
+        return;
+      }
+
+      if (nextEnabled) {
+        await scheduleDaily(nextHour, nextMinute);
+      }
+
+      if (nextSmartEnabled) {
+        const r = await scheduleSmartTomorrow(nextSmartHour, nextSmartMinute);
+        if (r.scheduled) {
+          setSmartStatus(`✅ Inteligente programada (${r.label} · ${r.risk}/100)`);
+        } else {
+          const reason = (r as any).reason;
+          if (reason === 'no-checkin-today') setSmartStatus('ℹ️ Haz check-in hoy para programar la inteligente.');
+          else if (reason === 'risk-low') setSmartStatus('✅ Riesgo bajo: no se programó para evitar spam.');
+          else setSmartStatus('ℹ️ No se programó.');
+        }
+      } else {
+        await cancelSmartLast();
+        setSmartStatus('');
+      }
+
+      await refreshScheduledCount();
+    },
+    [refreshScheduledCount]
+  );
+
+  const toggle = useCallback(async () => {
+    const next = !enabled;
+    setEnabled(next);
+    await apply(next, hour, minute, smartEnabled, smartHour, smartMinute);
+  }, [apply, enabled, hour, minute, smartEnabled, smartHour, smartMinute]);
+
+  const toggleSmart = useCallback(async () => {
+    const next = !smartEnabled;
+    setSmartEnabled(next);
+    await apply(enabled, hour, minute, next, smartHour, smartMinute);
+  }, [apply, enabled, hour, minute, smartEnabled, smartHour, smartMinute]);
+
+  const disable = useCallback(async () => {
+    setEnabled(false);
+    await apply(false, hour, minute, smartEnabled, smartHour, smartMinute);
+    Alert.alert('Listo', 'Recordatorio desactivado.');
+  }, [apply, hour, minute, smartEnabled, smartHour, smartMinute]);
+
+  const setTimePreset = useCallback(
+    async (h: number, m: number) => {
+      setHour(h);
+      setMinute(m);
+      if (enabled) {
+        await apply(true, h, m, smartEnabled, smartHour, smartMinute);
+      } else {
+        await saveSettings(false, h, m, smartEnabled, smartHour, smartMinute);
+      }
+    },
+    [apply, enabled, smartEnabled, smartHour, smartMinute]
+  );
+
+  const setSmartTimePreset = useCallback(
+    async (h: number, m: number) => {
+      setSmartHour(h);
+      setSmartMinute(m);
+      if (smartEnabled) {
+        await apply(enabled, hour, minute, true, h, m);
+      } else {
+        await saveSettings(enabled, hour, minute, false, h, m);
+      }
+    },
+    [apply, enabled, hour, minute, smartEnabled]
+  );
+
+  const setModePreset = useCallback(async (next: PlanMode) => {
+    setMode(next);
+    try {
+      await AsyncStorage.setItem(STORAGE_MODE, next);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const sendTest = useCallback(async () => {
+    const ok = await ensurePermission();
+    if (!ok) {
+      Alert.alert('Permiso denegado', 'Activa notificaciones en Ajustes.');
+      return;
+    }
+
+    await ensureAndroidChannel();
+
+    try {
+      const trigger =
+        Platform.OS === 'android'
+          ? ({ type: 'timeInterval', seconds: 2, repeats: false, channelId: CHANNEL_ID } as any)
+          : ({ seconds: 2 } as any);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Prueba ✅',
+          body: 'Si viste esto, tus notificaciones funcionan.',
+          sound: 'default',
+        },
+        trigger,
+      });
+
+      Alert.alert('Listo', 'Notificación de prueba enviada (2s).');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo enviar la notificación.');
+    }
+  }, []);
+
+  const profileSummary = useMemo(() => {
+    if (!profile) return null;
+    const parts: string[] = [];
+
+    const nombre = (profile.nombre ?? '').trim();
+    if (nombre) parts.push(nombre);
+
+    const edad = Number(profile.edad);
+    if (!Number.isNaN(edad) && edad > 0) parts.push(`${edad} años`);
+
+    const sexo = (profile.sexo ?? '').toString().trim();
+    if (sexo) parts.push(sexo);
+
+    const altura = Number(profile.altura_cm);
+    if (!Number.isNaN(altura) && altura > 0) parts.push(`${altura} cm`);
+
+    const peso = Number(profile.peso_kg);
+    if (!Number.isNaN(peso) && peso > 0) parts.push(`${peso} kg`);
+
+    return parts.length ? parts.join(' · ') : null;
+  }, [profile]);
+
+  const profileName = useMemo(() => {
+    const n = (profile?.nombre ?? '').toString().trim();
+    return n || null;
+  }, [profile]);
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 14 }}>
+      <Text style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Perfil</Text>
+      <Text style={{ color: COLORS.muted }}>Ajustes de recordatorios y preferencias.</Text>
+
+      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>👤 Tu perfil</Text>
+        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+          {profileName ? `Hola, ${profileName}.` : 'Completa tu perfil para personalizar el Coach, Plan y métricas.'}
+        </Text>
+
+        {profileSummary ? (
+          <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>{profileSummary}</Text>
+        ) : (
+          <Text style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay datos guardados.</Text>
+        )}
+
+        <Pressable
+          onPress={() => router.push('/onboarding?edit=1&from=perfil')}
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 14,
+            backgroundColor: COLORS.orange,
+          }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: 'white' }}>
+            {profileSummary ? 'Editar perfil' : 'Completar perfil'}
+          </Text>
+        </Pressable>
+
+        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+          Tip: tu nombre se usará para que el Coach te hable de forma más personal.
+        </Text>
+      </View>
+
+      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🎯 Modo</Text>
+        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+          Elige tu objetivo. Se aplicará a tu Plan, Coach y recomendaciones.
+        </Text>
+
+        <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>Actual: {MODE_LABEL[mode]}</Text>
+
+        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <Chip label="Agresiva" active={mode === 'agresiva'} onPress={() => setModePreset('agresiva')} />
+          <Chip label="Balance" active={mode === 'balance'} onPress={() => setModePreset('balance')} />
+          <Chip label="Mantenimiento" active={mode === 'mantenimiento'} onPress={() => setModePreset('mantenimiento')} />
+        </View>
+
+        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+          Nota: puedes cambiarlo cuando quieras.
+        </Text>
+      </View>
+
+      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Recordatorio diario</Text>
+        <Text style={{ marginTop: 6, color: COLORS.muted }}>Check-in para cerrar tu día en 30 segundos.</Text>
+
+        <Pressable
+          onPress={toggle}
+          style={{
+            marginTop: 12,
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: enabled ? COLORS.orange : '#fff',
+            borderWidth: 1,
+            borderColor: enabled ? COLORS.orange : COLORS.border,
+          }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: enabled ? 'white' : COLORS.text }}>
+            {enabled ? 'Activado' : 'Activar'}
+          </Text>
+        </Pressable>
+
+        {enabled ? (
+          <Pressable
+            onPress={disable}
+            style={{
+              marginTop: 10,
+              padding: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              backgroundColor: '#fff',
+            }}
+          >
+            <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Desactivar</Text>
+          </Pressable>
+        ) : null}
+
+        <Text style={{ marginTop: 14, fontWeight: '900', color: COLORS.text }}>Hora</Text>
+        <Text style={{ marginTop: 4, color: COLORS.muted }}>Actual: {timeLabel}</Text>
+
+        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <Chip label="7:00 PM" active={hour === 19 && minute === 0} onPress={() => setTimePreset(19, 0)} />
+          <Chip label="8:00 PM" active={hour === 20 && minute === 0} onPress={() => setTimePreset(20, 0)} />
+          <Chip label="9:00 PM" active={hour === 21 && minute === 0} onPress={() => setTimePreset(21, 0)} />
+        </View>
+
+        <Pressable
+          onPress={sendTest}
+          style={{
+            marginTop: 14,
+            padding: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            backgroundColor: '#fff',
+          }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Enviar prueba</Text>
+        </Pressable>
+
+        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+          Programadas: {scheduledCount} · Nota: en algunos Android la entrega puede variar por ahorro de batería.
+        </Text>
+
+        <View style={{ marginTop: 16, height: 1, backgroundColor: COLORS.border }} />
+
+        <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '900', color: COLORS.text }}>Notificación inteligente</Text>
+        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+          Basada en tu check-in de hoy. Se programa para mañana si el riesgo de antojos es medio/alto.
+        </Text>
+
+        <Pressable
+          onPress={toggleSmart}
+          style={{
+            marginTop: 12,
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: smartEnabled ? COLORS.orange : '#fff',
+            borderWidth: 1,
+            borderColor: smartEnabled ? COLORS.orange : COLORS.border,
+          }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: smartEnabled ? 'white' : COLORS.text }}>
+            {smartEnabled ? 'Inteligente activada' : 'Activar inteligente'}
+          </Text>
+        </Pressable>
+
+        <Text style={{ marginTop: 14, fontWeight: '900', color: COLORS.text }}>Hora (inteligente)</Text>
+        <Text style={{ marginTop: 4, color: COLORS.muted }}>Actual: {fmtTime(smartHour, smartMinute)}</Text>
+
+        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <Chip label="2:00 PM" active={smartHour === 14 && smartMinute === 0} onPress={() => setSmartTimePreset(14, 0)} />
+          <Chip label="3:00 PM" active={smartHour === 15 && smartMinute === 0} onPress={() => setSmartTimePreset(15, 0)} />
+          <Chip label="4:00 PM" active={smartHour === 16 && smartMinute === 0} onPress={() => setSmartTimePreset(16, 0)} />
+        </View>
+
+        {smartStatus ? (
+          <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>{smartStatus}</Text>
+        ) : null}
+      </View>
+
+      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🏅 Logros</Text>
+        <Text style={{ marginTop: 6, color: COLORS.muted }}>Se desbloquean automáticamente con tus check-ins.</Text>
+
+        {achievements.length === 0 ? (
+          <Text style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay logros. Haz un check-in para empezar.</Text>
+        ) : (
+          <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {achievements.map((a) => (
+              <Pressable
+                key={a.id}
+                onPress={() =>
+                  Alert.alert(
+                    a.title,
+                    `${a.description}\n\nDesbloqueado: ${new Date(a.unlockedAt).toLocaleDateString('es-MX')}`
+                  )
+                }
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: COLORS.orangeSoft,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}
+              >
+                <Text style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Siguiente</Text>
+        <Text style={{ marginTop: 8, color: COLORS.muted }}>• Insights (patrones de sueño/estrés/antojos)</Text>
+        <Text style={{ marginTop: 4, color: COLORS.muted }}>• Calendario mensual</Text>
+      </View>
+    </ScrollView>
+  );
+}
