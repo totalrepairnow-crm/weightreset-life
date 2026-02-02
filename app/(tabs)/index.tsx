@@ -1,9 +1,12 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWRTheme } from '../../theme/theme';
+import Card from '../../ui/Card';
+import Screen from '../../ui/Screen';
+import WRText from '../../ui/Text';
 
 import { isoDateKey } from '../../constants/date';
 
@@ -528,11 +531,6 @@ const DEFAULT_COLORS = {
 
 const makeStyles = (colors: typeof DEFAULT_COLORS, radius: typeof DEFAULT_RADIUS, spacing: typeof DEFAULT_SPACING) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: colors.bg,
-    },
-
     content: {
       width: '100%',
       alignSelf: 'center',
@@ -573,34 +571,6 @@ const makeStyles = (colors: typeof DEFAULT_COLORS, radius: typeof DEFAULT_RADIUS
     softHint: {
       marginTop: spacing.sm,
       color: `rgba(255,255,255,0.55)`,
-      fontWeight: '700',
-    },
-
-    cardBase: {
-      width: '100%',
-      alignSelf: 'stretch',
-      backgroundColor: colors.card,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
-    },
-
-    cardHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-    },
-
-    cardTitle: {
-      fontSize: 18,
-      fontWeight: '900',
-      color: colors.text,
-    },
-
-    cardSubtitle: {
-      marginTop: 6,
-      color: colors.muted,
       fontWeight: '700',
     },
 
@@ -874,37 +844,13 @@ export default function HoyScreen() {
     router.push('/(tabs)/comidas');
   }, []);
 
-  const Card = ({
-    title,
-    subtitle,
-    right,
-    children,
-  }: {
-    title?: string;
-    subtitle?: string;
-    right?: React.ReactNode;
-    children: React.ReactNode;
-  }) => (
-    <View style={[styles.cardBase, CARD_SHADOW]}>
-      {title || subtitle || right ? (
-        <View style={[styles.cardHeaderRow, { gap: spacing.sm }]}>
-          <View style={{ flex: 1 }}>
-            {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
-            {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
-          </View>
-          {right ? <View>{right}</View> : null}
-        </View>
-      ) : null}
-      <View style={{ marginTop: title || subtitle || right ? spacing.md : 0 }}>{children}</View>
-    </View>
-  );
 
   const Chip = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.9 : 1 }]}
     >
-      <Text style={styles.chipText}>{label}</Text>
+      <WRText style={styles.chipText}>{label}</WRText>
     </Pressable>
   );
 
@@ -934,32 +880,32 @@ export default function HoyScreen() {
           },
         ]}
       >
-        <Text style={[styles.btnText, { color: textColor }]}>{label}</Text>
+        <WRText style={[styles.btnText, { color: textColor }]}>{label}</WRText>
       </Pressable>
     );
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={{
-        width: '100%',
-        maxWidth: contentMaxWidth,
-        alignSelf: 'center',
-        paddingHorizontal: spacing.md,
-        paddingTop: spacing.lg,
-        paddingBottom: contentBottomPadding,
-        gap: spacing.md,
-      }}
-      showsVerticalScrollIndicator={false}
-    >
+    <Screen>
+      <ScrollView
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: contentMaxWidth,
+          alignSelf: 'center',
+          paddingHorizontal: spacing.md,
+          paddingTop: spacing.lg,
+          paddingBottom: contentBottomPadding,
+          gap: spacing.md,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header row */}
       <View style={[styles.headerRow, { gap: spacing.sm }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.h1}>Hoy</Text>
-          <Text style={styles.subtitle}>
+          <WRText style={styles.h1}>Hoy</WRText>
+          <WRText style={styles.subtitle}>
             Tu plan para sentirte ligero, fuerte y con energía.
-          </Text>
+          </WRText>
         </View>
         <Pressable
           onPress={() => setShowDetails((v) => !v)}
@@ -972,14 +918,14 @@ export default function HoyScreen() {
             },
           ]}
         >
-          <Text
+          <WRText
             style={{
               fontWeight: '900',
               color: showDetails ? (isLightHex(colors.primary) ? '#111111' : '#FFFFFF') : colors.text,
             }}
           >
             {showDetails ? 'Menos' : 'Detalles'}
-          </Text>
+          </WRText>
         </Pressable>
       </View>
 
@@ -1055,7 +1001,7 @@ export default function HoyScreen() {
                                 opacity: 0.95,
                               }}
                             />
-                            <Text
+                            <WRText
                               numberOfLines={3}
                               style={{
                                 marginTop: spacing.md,
@@ -1068,7 +1014,7 @@ export default function HoyScreen() {
                               }}
                             >
                               {item.label}
-                            </Text>
+                            </WRText>
                           </Pressable>
                         );
                       })}
@@ -1104,21 +1050,21 @@ export default function HoyScreen() {
             opacity: moodSelected ? 1 : 0.45,
           }}
         >
-          <Text style={{ color: isLightHex(colors.primary) ? '#111111' : '#FFFFFF', fontWeight: '900', textAlign: 'center' }}>
+          <WRText style={{ color: isLightHex(colors.primary) ? '#111111' : '#FFFFFF', fontWeight: '900', textAlign: 'center' }}>
             {mood ? 'Actualizar check-in' : 'Guardar check-in'}
-          </Text>
+          </WRText>
         </Pressable>
 
-        <Text style={{ marginTop: spacing.sm, color: hexToRgba(colors.text, 0.55), fontWeight: '700' }}>
+        <WRText style={{ marginTop: spacing.sm, color: hexToRgba(colors.text, 0.55), fontWeight: '700' }}>
           Esto ayuda al Coach a ajustar tu plan según energía/estrés.
-        </Text>
+        </WRText>
       </Card>
 
       {/* Today summary */}
       <Card
         title="Tu día en 10 segundos"
         subtitle={`Enfoque: ${focusText}`}
-        right={<Text style={{ fontSize: 44, fontWeight: '900', color: colors.primary, lineHeight: 48 }}>{score}</Text>}
+        right={<WRText style={{ fontSize: 44, fontWeight: '900', color: colors.primary, lineHeight: 48 }}>{score}</WRText>}
       >
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: isExpanded ? 'wrap' : 'nowrap' }}>
           {[
@@ -1139,15 +1085,15 @@ export default function HoyScreen() {
                 borderColor: colors.border,
               }}
             >
-              <Text style={{ fontWeight: '900', color: colors.text, fontSize: 16 }}>{p.value}</Text>
-              <Text style={{ marginTop: 4, color: colors.muted, fontWeight: '700', fontSize: 12 }}>{p.label}</Text>
+              <WRText style={{ fontWeight: '900', color: colors.text, fontSize: 16 }}>{p.value}</WRText>
+              <WRText style={{ marginTop: 4, color: colors.muted, fontWeight: '700', fontSize: 12 }}>{p.label}</WRText>
             </View>
           ))}
         </View>
 
         {showDetails ? (
           <View style={{ marginTop: spacing.md }}>
-            <Text style={{ color: colors.muted, fontWeight: '600' }}>No es perfección. Es volver a sentirte tú.</Text>
+            <WRText style={{ color: colors.muted, fontWeight: '600' }}>No es perfección. Es volver a sentirte tú.</WRText>
             <View style={{ marginTop: spacing.sm, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <Chip label={`Sueño: ${checkin ? `${Math.round(checkin.sueno_horas)} h` : '—'}`} onPress={() => goRegistrar('sueno')} />
               <Chip label={`Estrés: ${checkin ? `${checkin.estres}/5` : '—'}`} onPress={() => goRegistrar('estres')} />
@@ -1156,7 +1102,7 @@ export default function HoyScreen() {
             </View>
           </View>
         ) : (
-          <Text style={{ color: colors.muted, fontWeight: '600' }}>Tip: toca “Detalles” para ver sueño/estrés/antojos.</Text>
+          <WRText style={{ color: colors.muted, fontWeight: '600' }}>Tip: toca “Detalles” para ver sueño/estrés/antojos.</WRText>
         )}
       </Card>
 
@@ -1166,8 +1112,8 @@ export default function HoyScreen() {
         subtitle={`Comidas: ${mealsSummary.mealsCount}`}
         right={
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{mealsSummary.calories}</Text>
-            <Text style={{ color: colors.muted, fontWeight: '700' }}>/ {targets.calories} kcal</Text>
+            <WRText style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{mealsSummary.calories}</WRText>
+            <WRText style={{ color: colors.muted, fontWeight: '700' }}>/ {targets.calories} kcal</WRText>
           </View>
         }
       >
@@ -1190,11 +1136,11 @@ export default function HoyScreen() {
           ].map((row) => (
             <View key={row.label}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.muted, fontWeight: '700' }}>{row.label}</Text>
-                <Text style={{ fontWeight: '900', color: colors.text }}>
+                <WRText style={{ color: colors.muted, fontWeight: '700' }}>{row.label}</WRText>
+                <WRText style={{ fontWeight: '900', color: colors.text }}>
                   {row.done}/{row.target}
                   {row.suffix}
-                </Text>
+                </WRText>
               </View>
               <View style={{
                 marginTop: 6,
@@ -1231,11 +1177,11 @@ export default function HoyScreen() {
             ].map((row) => (
               <View key={row.label}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: colors.muted, fontWeight: '700' }}>{row.label}</Text>
-                  <Text style={{ fontWeight: '900', color: colors.text }}>
+                  <WRText style={{ color: colors.muted, fontWeight: '700' }}>{row.label}</WRText>
+                  <WRText style={{ fontWeight: '900', color: colors.text }}>
                     {row.done}/{row.target}
                     {row.suffix}
-                  </Text>
+                  </WRText>
                 </View>
                 <View style={{
                   marginTop: 6,
@@ -1255,15 +1201,15 @@ export default function HoyScreen() {
           ) : null}
         </View>
 
-        <Text style={{ color: colors.muted, fontWeight: '600', marginTop: 10 }}>
+        <WRText style={{ color: colors.muted, fontWeight: '600', marginTop: 10 }}>
           Siguiente paso:{' '}
           {mealsSummary.protein_g < targets.protein_g ? (
-            <Text style={{ fontWeight: '900', color: colors.text }}>sube proteína</Text>
+            <WRText style={{ fontWeight: '900', color: colors.text }}>sube proteína</WRText>
           ) : (
-            <Text style={{ fontWeight: '900', color: colors.text }}>mantén consistencia</Text>
+            <WRText style={{ fontWeight: '900', color: colors.text }}>mantén consistencia</WRText>
           )}{' '}
           (ej: huevos, pollo, atún, yogurt griego).
-        </Text>
+        </WRText>
 
         <View style={{ marginTop: 12 }}>
           <Button label="Ver / Agregar comidas" onPress={goComidas} />
@@ -1298,10 +1244,10 @@ export default function HoyScreen() {
                   opacity: pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: colors.text, fontWeight: '800' }}>
+                <WRText style={{ color: colors.text, fontWeight: '800' }}>
                   {isOn ? '✅ ' : '☐ '}
                   {t}
-                </Text>
+                </WRText>
               </Pressable>
             );
           })}
@@ -1312,11 +1258,12 @@ export default function HoyScreen() {
         </View>
 
         {showDetails ? (
-          <Text style={{ marginTop: 10, color: hexToRgba(colors.text, 0.55), fontWeight: '700' }}>Meta: tener energía para jugar, correr, viajar y disfrutar.</Text>
+          <WRText style={{ marginTop: 10, color: hexToRgba(colors.text, 0.55), fontWeight: '700' }}>Meta: tener energía para jugar, correr, viajar y disfrutar.</WRText>
         ) : null}
       </Card>
 
       <View style={{ height: 8 }} />
-    </ScrollView>
+      </ScrollView>
+    </Screen>
   );
 }
