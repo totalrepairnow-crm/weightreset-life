@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWRTheme } from '../../theme/theme';
 
@@ -526,6 +526,112 @@ const DEFAULT_COLORS = {
   danger: '#EF4444',
 };
 
+const makeStyles = (colors: typeof DEFAULT_COLORS, radius: typeof DEFAULT_RADIUS, spacing: typeof DEFAULT_SPACING) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+
+    content: {
+      width: '100%',
+      alignSelf: 'center',
+    },
+
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+
+    h1: {
+      fontSize: 34,
+      fontWeight: '900',
+      letterSpacing: 0.2,
+      color: colors.text,
+    },
+
+    subtitle: {
+      marginTop: 4,
+      color: colors.muted,
+      fontWeight: '600',
+    },
+
+    togglePill: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+    },
+
+    actionsRow: {
+      flexDirection: 'row',
+      marginTop: 6,
+    },
+
+    softHint: {
+      marginTop: spacing.sm,
+      color: `rgba(255,255,255,0.55)`,
+      fontWeight: '700',
+    },
+
+    cardBase: {
+      width: '100%',
+      alignSelf: 'stretch',
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+    },
+
+    cardHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+
+    cardTitle: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: colors.text,
+    },
+
+    cardSubtitle: {
+      marginTop: 6,
+      color: colors.muted,
+      fontWeight: '700',
+    },
+
+    chip: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    chipText: {
+      fontWeight: '900',
+      color: colors.text,
+    },
+
+    btn: {
+      flex: 1,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      borderWidth: 1,
+    },
+
+    btnText: {
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+  });
+
 export default function HoyScreen() {
   const ctx = useWRTheme();
   const theme = ctx?.theme;
@@ -534,6 +640,8 @@ export default function HoyScreen() {
   const radius = theme?.radius ?? DEFAULT_RADIUS;
   const spacing = theme?.spacing ?? DEFAULT_SPACING;
   const colors = theme?.colors ?? DEFAULT_COLORS;
+
+  const styles = useMemo(() => makeStyles(colors, radius, spacing), [colors, radius, spacing]);
 
   const { width: windowWidth } = useWindowDimensions();
 
@@ -766,48 +874,37 @@ export default function HoyScreen() {
     router.push('/(tabs)/comidas');
   }, []);
 
-  const Card = ({ title, subtitle, right, children }: { title?: string; subtitle?: string; right?: React.ReactNode; children: React.ReactNode }) => (
-    <View
-      style={[
-        {
-          width: '100%',
-          alignSelf: 'stretch',
-          backgroundColor: colors.card,
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: spacing.md,
-        },
-        CARD_SHADOW,
-      ]}
-    >
-      {(title || subtitle || right) ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+  const Card = ({
+    title,
+    subtitle,
+    right,
+    children,
+  }: {
+    title?: string;
+    subtitle?: string;
+    right?: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <View style={[styles.cardBase, CARD_SHADOW]}>
+      {title || subtitle || right ? (
+        <View style={[styles.cardHeaderRow, { gap: spacing.sm }]}>
           <View style={{ flex: 1 }}>
-            {title ? <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{title}</Text> : null}
-            {subtitle ? <Text style={{ marginTop: 6, color: colors.muted, fontWeight: '700' }}>{subtitle}</Text> : null}
+            {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
+            {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
           </View>
           {right ? <View>{right}</View> : null}
         </View>
       ) : null}
-      <View style={{ marginTop: (title || subtitle || right) ? spacing.md : 0 }}>{children}</View>
+      <View style={{ marginTop: title || subtitle || right ? spacing.md : 0 }}>{children}</View>
     </View>
   );
 
   const Chip = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 999,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        opacity: pressed ? 0.9 : 1,
-      })}
+      style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.9 : 1 }]}
     >
-      <Text style={{ fontWeight: '900', color: colors.text }}>{label}</Text>
+      <Text style={styles.chipText}>{label}</Text>
     </Pressable>
   );
 
@@ -821,30 +918,30 @@ export default function HoyScreen() {
     variant?: 'primary' | 'secondary';
   }) => {
     const isSecondary = variant === 'secondary';
+    const bg = isSecondary ? colors.surface : colors.primary;
+    const border = isSecondary ? colors.border : 'transparent';
+    const textColor = isSecondary ? colors.text : isLightHex(colors.primary) ? '#111111' : '#FFFFFF';
+
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => ({
-          flex: 1,
-          paddingVertical: 14,
-          paddingHorizontal: 14,
-          borderRadius: 999,
-          backgroundColor: isSecondary ? colors.surface : colors.primary,
-          borderWidth: 1,
-          borderColor: isSecondary ? colors.border : 'transparent',
-          opacity: pressed ? 0.92 : 1,
-        })}
+        style={({ pressed }) => [
+          styles.btn,
+          {
+            backgroundColor: bg,
+            borderColor: border,
+            opacity: pressed ? 0.92 : 1,
+          },
+        ]}
       >
-        <Text style={{ color: isSecondary ? colors.text : (isLightHex(colors.primary) ? '#111111' : '#FFFFFF'), fontWeight: '900', textAlign: 'center' }}>
-          {label}
-        </Text>
+        <Text style={[styles.btnText, { color: textColor }]}>{label}</Text>
       </Pressable>
     );
   };
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
+      style={styles.screen}
       contentContainerStyle={{
         width: '100%',
         maxWidth: contentMaxWidth,
@@ -857,26 +954,23 @@ export default function HoyScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header row */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+      <View style={[styles.headerRow, { gap: spacing.sm }]}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 34, fontWeight: '900', color: colors.text, letterSpacing: 0.2 }}>Hoy</Text>
-          <Text style={{ marginTop: 4, color: colors.muted, fontWeight: '600' }}>
+          <Text style={styles.h1}>Hoy</Text>
+          <Text style={styles.subtitle}>
             Tu plan para sentirte ligero, fuerte y con energía.
           </Text>
         </View>
-
         <Pressable
           onPress={() => setShowDetails((v) => !v)}
-          style={({ pressed }) => ({
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            borderRadius: 999,
-            backgroundColor: showDetails ? colors.primary : colors.surface,
-            borderWidth: 1,
-            borderColor: showDetails ? 'transparent' : colors.border,
-            alignSelf: 'flex-start',
-            opacity: pressed ? 0.9 : 1,
-          })}
+          style={({ pressed }) => [
+            styles.togglePill,
+            {
+              backgroundColor: showDetails ? colors.primary : colors.surface,
+              borderColor: showDetails ? 'transparent' : colors.border,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
         >
           <Text
             style={{
@@ -890,7 +984,7 @@ export default function HoyScreen() {
       </View>
 
       {/* Actions row */}
-      <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: 6, flexWrap: isExpanded ? 'wrap' : 'nowrap' }}>
+      <View style={[styles.actionsRow, { gap: spacing.sm, flexWrap: isExpanded ? 'wrap' : 'nowrap' }]}>
         <Button label="Registrar" onPress={() => goRegistrar()} />
         <Button label="Comidas" onPress={goComidas} variant="secondary" />
       </View>
@@ -969,7 +1063,6 @@ export default function HoyScreen() {
                                 fontWeight: '900',
                                 textAlign: 'center',
                                 maxWidth: '100%',
-                            
                                 lineHeight: 19,
                                 fontSize: 14,
                               }}
