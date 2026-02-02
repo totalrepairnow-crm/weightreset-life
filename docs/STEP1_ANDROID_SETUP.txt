@@ -1,0 +1,28 @@
+WEIGHTRESET LIFE - STEP 1 (ANDROID LOCAL SETUP) - NOTES
+
+Repo:
+- path: ~/weightreset-life
+- remote: https://github.com/totalrepairnow-crm/weightreset-life.git
+
+Machine:
+- Mac (Apple Silicon / M1)
+
+Java (required for Gradle):
+- JAVA_HOME: /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
+- java -version: OpenJDK 17 (Eclipse Adoptium / Temurin)
+
+Android SDK:
+- ANDROID_HOME: /Users/smith/Library/Android/sdk
+- adb version: 1.0.41 (platform-tools 36.0.2-14143358)
+- emulator detected: emulator-5554
+
+Expo / Build notes:
+- "npx expo run:android" requires:
+  - Java runtime installed (fixed with Temurin 17)
+  - Android SDK installed + emulator running
+  - if Expo says "No development build installed", use:
+    - npx expo prebuild --platform android --clean
+    - npx expo run:android
+
+Git:
+- Use feature branches and PRs.
