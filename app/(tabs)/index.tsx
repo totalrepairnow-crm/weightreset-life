@@ -1,5 +1,4 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -713,10 +712,8 @@ export default function HoyScreen() {
     // Expanded: let the grid occupy the full available row width.
     // Compact: keep the exact 2-column width for a centered 2x2 selector.
     if (isExpanded) {
-      const containerPadding = spacing.md * 2;
-      const maxContainer = Math.min(effectiveWidth, contentMaxWidth);
-      const available = Math.max(0, maxContainer - containerPadding);
-      return available;
+      const gaps = MOOD_GRID_GAP * (moodGridColumns - 1);
+      return moodGridColumns * moodCardWidth + gaps;
     }
 
     const gaps = MOOD_GRID_GAP * (moodGridColumns - 1);
@@ -960,67 +957,72 @@ export default function HoyScreen() {
 
             return (
               <View style={{ width: '100%', alignItems: 'center' }}>
-                <View style={{ width: moodGridWidth, gap: MOOD_GRID_GAP, alignSelf: isExpanded ? 'stretch' : 'center' }}>
-                {rows.map((row, rowIdx) => {
-                  const colsInRow = row.length;
+                <View
+                  style={{
+                    width: isExpanded ? '100%' : moodGridWidth,
+                    maxWidth: isExpanded ? moodGridWidth : moodGridWidth,
+                    gap: MOOD_GRID_GAP,
+                    alignSelf: isExpanded ? 'stretch' : 'center',
+                  }}
+                >
+                  {rows.map((row, rowIdx) => {
+                    return (
+                      <View
+                        key={`mood-row-${rowIdx}`}
+                        style={{
+                          flexDirection: 'row',
+                          gap: MOOD_GRID_GAP,
+                          justifyContent: isExpanded ? 'space-between' : 'space-between',
+                        }}
+                      >
+                        {row.map((item) => {
+                          const isSelected =
+                            (moodSelected?.energy ?? mood?.energy) === item.energy &&
+                            (moodSelected?.valence ?? mood?.valence) === item.valence;
 
-                  return (
-                    <View
-                      key={`mood-row-${rowIdx}`}
-                      style={{
-                        flexDirection: 'row',
-                        gap: MOOD_GRID_GAP,
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      {row.map((item) => {
-                        const isSelected =
-                          (moodSelected?.energy ?? mood?.energy) === item.energy &&
-                          (moodSelected?.valence ?? mood?.valence) === item.valence;
-
-                        return (
-                          <Pressable
-                            key={item.label}
-                            onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
-                            style={{
-                              width: moodCardWidth,
-                              borderRadius: radius.md,
-                              padding: spacing.md,
-                              backgroundColor: colors.surface,
-                              borderWidth: 1,
-                              borderColor: isSelected ? hexToRgba(colors.text, 0.25) : colors.border,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <View
+                          return (
+                            <Pressable
+                              key={item.label}
+                              onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
                               style={{
-                                width: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                height: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                borderRadius: 999,
-                                backgroundColor: item.color,
-                                opacity: 0.95,
-                              }}
-                            />
-                            <WRText
-                              numberOfLines={3}
-                              style={{
-                                marginTop: spacing.md,
-                                color: colors.text,
-                                fontWeight: '900',
-                                textAlign: 'center',
-                                maxWidth: '100%',
-                                lineHeight: 19,
-                                fontSize: 14,
+                                width: moodCardWidth,
+                                borderRadius: radius.md,
+                                padding: spacing.md,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: isSelected ? hexToRgba(colors.text, 0.25) : colors.border,
+                                alignItems: 'center',
                               }}
                             >
-                              {item.label}
-                            </WRText>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  );
-                })}
+                              <View
+                                style={{
+                                  width: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
+                                  height: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
+                                  borderRadius: 999,
+                                  backgroundColor: item.color,
+                                  opacity: 0.95,
+                                }}
+                              />
+                              <WRText
+                                numberOfLines={3}
+                                style={{
+                                  marginTop: spacing.md,
+                                  color: colors.text,
+                                  fontWeight: '900',
+                                  textAlign: 'center',
+                                  maxWidth: '100%',
+                                  lineHeight: 19,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {item.label}
+                              </WRText>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             );
