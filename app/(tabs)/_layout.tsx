@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWRTheme } from "../../theme/theme";
 
@@ -29,6 +29,9 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { theme } = useWRTheme();
 
+  const { width } = useWindowDimensions();
+  const isExpanded = width >= 600;
+
   // Fallback defensivo por si el Provider no está listo aún
   const colors = theme?.colors ?? {
     bg: "#0B0F14",
@@ -47,95 +50,124 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="index"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
+      screenOptions={({ route }) => {
+        const barHeight = isExpanded ? 72 : 64;
+        const padV = isExpanded ? 10 : 8;
+        const bottomInset = Math.max(10, insets.bottom + 8);
 
-        // Colors
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
+        return {
+          headerShown: false,
+          tabBarHideOnKeyboard: true,
 
-        // Reduce visual noise: show label only for the focused tab.
-        tabBarShowLabel: true,
-        tabBarLabel: ({ focused, color, children }) => {
-          if (!focused) return null;
-          const label = typeof children === "string" ? children : "";
-          return (
-            <View style={{ marginTop: 2 }}>
-              <Text style={{ color, fontWeight: "900", fontSize: 11 }}>{label}</Text>
-            </View>
-          );
-        },
+          // Colors
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.muted,
 
-        // Typography
-        tabBarLabelStyle: {
-          fontWeight: "900",
-          fontSize: 11,
-          marginTop: 2,
-        },
+          // Reduce visual noise: show label only for the focused tab.
+          tabBarShowLabel: true,
+          tabBarLabel: ({ focused, color, children }) => {
+            if (!focused) return null;
+            const label = typeof children === "string" ? children : "";
+            return (
+              <View style={{ marginTop: 2 }}>
+                {/* Use RN Text here to avoid pulling a custom Text component into navigation options */}
+                <View>
+                  <Text
+                    style={{
+                      color,
+                      fontWeight: "900",
+                      fontSize: 11,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              </View>
+            );
+          },
 
-        // Floating premium bar: rounded, inset, softer border.
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopWidth: 0,
+          // Typography (kept for safety; label renderer above controls actual label)
+          tabBarLabelStyle: {
+            fontWeight: "900",
+            fontSize: 11,
+            marginTop: 2,
+          },
 
-          position: "absolute",
-          left: 12,
-          right: 12,
-          bottom: Math.max(10, insets.bottom + 8),
+          // Floating premium bar: rounded, inset, softer border.
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopWidth: 0,
 
-          height: 64,
-          paddingTop: 8,
-          paddingBottom: 8,
+            position: "absolute",
+            left: isExpanded ? 18 : 12,
+            right: isExpanded ? 18 : 12,
+            bottom: bottomInset,
 
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: colors.border,
+            height: barHeight,
+            paddingTop: padV,
+            paddingBottom: padV,
 
-          shadowColor: "#000",
-          shadowOpacity: 0.22,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 14,
-        },
+            borderRadius: isExpanded ? 24 : 20,
+            borderWidth: 1,
+            borderColor: colors.border,
 
-        tabBarItemStyle: {
-          paddingVertical: 4,
-        },
+            shadowColor: "#000",
+            shadowOpacity: 0.22,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 14,
 
-        tabBarIcon: ({ color, size, focused }) => {
-          const key = route.name;
-          const def = ICONS[key] ?? { active: "ellipse", inactive: "ellipse-outline" };
-          const iconName = focused ? def.active : def.inactive;
+            // On wide screens keep the bar from stretching too far
+            alignSelf: "center",
+            maxWidth: isExpanded ? 760 : undefined,
+          },
 
-          const iconSize = Math.max(22, size);
+          tabBarItemStyle: {
+            paddingVertical: 4,
+          },
 
-          return (
-            <View style={{ alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name={iconName} size={iconSize} color={color} />
-              {focused ? (
-                <View
-                  style={{
-                    marginTop: 6,
-                    width: 16,
-                    height: 2,
-                    borderRadius: 999,
-                    backgroundColor: colors.primary,
-                    opacity: 0.8,
-                  }}
-                />
-              ) : (
-                <View style={{ marginTop: 6, width: 18, height: 3, borderRadius: 999, opacity: 0 }} />
-              )}
-            </View>
-          );
-        },
+          tabBarIcon: ({ color, size, focused }) => {
+            const key = route.name;
+            const def = ICONS[key] ?? { active: "ellipse", inactive: "ellipse-outline" };
+            const iconName = focused ? def.active : def.inactive;
+            const iconSize = Math.max(22, size);
 
-        // Keep scene background consistent.
-        sceneStyle: {
-          backgroundColor: colors.bg,
-        },
-      })}
+            return (
+              <View style={{ alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name={iconName} size={iconSize} color={color} />
+                {focused ? (
+                  <View
+                    style={{
+                      marginTop: 6,
+                      width: 16,
+                      height: 2,
+                      borderRadius: 999,
+                      backgroundColor: colors.primary,
+                      opacity: 0.8,
+                    }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      marginTop: 6,
+                      width: 18,
+                      height: 3,
+                      borderRadius: 999,
+                      opacity: 0,
+                    }}
+                  />
+                )}
+              </View>
+            );
+          },
+
+          // Keep scene background consistent.
+          sceneStyle: {
+            backgroundColor: colors.bg,
+          },
+        };
+      }}
     >
       {/* Hoy */}
       <Tabs.Screen name="index" options={{ title: "Hoy" }} />
