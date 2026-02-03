@@ -1,9 +1,12 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useWRTheme } from '../../theme/theme';
+import Button from '../../ui/Button';
+import Card from '../../ui/Card';
+import Screen from '../../ui/Screen';
+import Text from '../../ui/Text';
 
 import { isoDateKey } from '../../constants/date';
 
@@ -497,18 +500,6 @@ function computeWellnessScore(checked: CheckedState, checkin: Checkin | null) {
   return clamp(Math.round(base + actionPts + sleepPts + movePts + stressPts + cravingsPts), 0, 100);
 }
 
-const CARD_SHADOW = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-  },
-  android: {
-    elevation: 10,
-  },
-  default: {},
-});
 
 const DEFAULT_RADIUS = { xs: 10, sm: 14, md: 18, lg: 22, xl: 28 };
 const DEFAULT_SPACING = { xs: 6, sm: 10, md: 14, lg: 18, xl: 24 };
@@ -528,15 +519,6 @@ const DEFAULT_COLORS = {
 
 const makeStyles = (colors: typeof DEFAULT_COLORS, radius: typeof DEFAULT_RADIUS, spacing: typeof DEFAULT_SPACING) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: colors.bg,
-    },
-
-    content: {
-      width: '100%',
-      alignSelf: 'center',
-    },
 
     headerRow: {
       flexDirection: 'row',
@@ -632,6 +614,35 @@ const makeStyles = (colors: typeof DEFAULT_COLORS, radius: typeof DEFAULT_RADIUS
     },
   });
 
+
+type ChipProps = {
+  label: string;
+  onPress?: () => void;
+};
+
+function Chip(props: ChipProps) {
+  const { theme } = useWRTheme();
+  const colors = theme?.colors ?? DEFAULT_COLORS;
+  const spacing = theme?.spacing ?? DEFAULT_SPACING;
+
+  return (
+    <Pressable
+      onPress={props.onPress}
+      style={({ pressed }) => ({
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        opacity: pressed ? 0.9 : 1,
+      })}
+    >
+      <Text style={{ fontWeight: '900', color: colors.text }}>{props.label}</Text>
+    </Pressable>
+  );
+}
+
 export default function HoyScreen() {
   const ctx = useWRTheme();
   const theme = ctx?.theme;
@@ -645,19 +656,6 @@ export default function HoyScreen() {
 
   const { width: windowWidth } = useWindowDimensions();
 
-  const insets = useSafeAreaInsets();
-
-  // Floating tab bar overlaps content on Android (esp. Z Fold when folded).
-  // Add bottom padding so cards/buttons are never hidden behind it.
-  // IMPORTANT: keep this predictable; over-padding makes folded layout look like it has "less room".
-  const contentBottomPadding = useMemo(() => {
-    // Tab bar height in app/(tabs)/_layout.tsx is 64, plus vertical padding and shadow.
-    // Use a conservative value so we don't waste space.
-    const tabBarVisualHeight = 64;
-    const extraChrome = 18; // shadow/offset + small breathing room
-    const safe = insets?.bottom ?? 0;
-    return spacing.lg + tabBarVisualHeight + extraChrome + safe;
-  }, [spacing.lg, insets?.bottom]);
 
   // Real container width (Z Fold can report a larger screen width than the visible pane when folded).
   // Use the onLayout width of the mood container as the source of truth when available.
@@ -874,84 +872,18 @@ export default function HoyScreen() {
     router.push('/(tabs)/comidas');
   }, []);
 
-  const Card = ({
-    title,
-    subtitle,
-    right,
-    children,
-  }: {
-    title?: string;
-    subtitle?: string;
-    right?: React.ReactNode;
-    children: React.ReactNode;
-  }) => (
-    <View style={[styles.cardBase, CARD_SHADOW]}>
-      {title || subtitle || right ? (
-        <View style={[styles.cardHeaderRow, { gap: spacing.sm }]}>
-          <View style={{ flex: 1 }}>
-            {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
-            {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
-          </View>
-          {right ? <View>{right}</View> : null}
-        </View>
-      ) : null}
-      <View style={{ marginTop: title || subtitle || right ? spacing.md : 0 }}>{children}</View>
-    </View>
-  );
-
-  const Chip = ({ label, onPress }: { label: string; onPress: () => void }) => (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.9 : 1 }]}
-    >
-      <Text style={styles.chipText}>{label}</Text>
-    </Pressable>
-  );
-
-  const Button = ({
-    label,
-    onPress,
-    variant = 'primary',
-  }: {
-    label: string;
-    onPress: () => void;
-    variant?: 'primary' | 'secondary';
-  }) => {
-    const isSecondary = variant === 'secondary';
-    const bg = isSecondary ? colors.surface : colors.primary;
-    const border = isSecondary ? colors.border : 'transparent';
-    const textColor = isSecondary ? colors.text : isLightHex(colors.primary) ? '#111111' : '#FFFFFF';
-
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.btn,
-          {
-            backgroundColor: bg,
-            borderColor: border,
-            opacity: pressed ? 0.92 : 1,
-          },
-        ]}
-      >
-        <Text style={[styles.btnText, { color: textColor }]}>{label}</Text>
-      </Pressable>
-    );
-  };
-
   return (
-    <ScrollView
-      style={styles.screen}
+    <Screen
+      scroll
       contentContainerStyle={{
         width: '100%',
         maxWidth: contentMaxWidth,
         alignSelf: 'center',
         paddingHorizontal: spacing.md,
         paddingTop: spacing.lg,
-        paddingBottom: contentBottomPadding,
+        paddingBottom: spacing.xl,
         gap: spacing.md,
       }}
-      showsVerticalScrollIndicator={false}
     >
       {/* Header row */}
       <View style={[styles.headerRow, { gap: spacing.sm }]}>
@@ -990,7 +922,13 @@ export default function HoyScreen() {
       </View>
 
       {/* Mood check-in */}
-      <Card title="¿Cómo te sientes ahora?" subtitle={moodSubtitle}>
+      <Card>
+        <View style={styles.cardHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>¿Cómo te sientes ahora?</Text>
+            <Text style={styles.cardSubtitle}>{moodSubtitle}</Text>
+          </View>
+        </View>
         <View
           onLayout={(e) => {
             const w = Math.round(e.nativeEvent.layout.width);
@@ -1013,68 +951,75 @@ export default function HoyScreen() {
             }
 
             return (
-              <View style={{ width: '100%', alignItems: 'center' }}>
-                <View style={{ width: moodGridWidth, gap: MOOD_GRID_GAP, alignSelf: isExpanded ? 'stretch' : 'center' }}>
-                {rows.map((row, rowIdx) => {
-                  const colsInRow = row.length;
+              <View style={{ width: '100%', alignItems: isExpanded ? 'stretch' : 'center' }}>
+                <View
+                  style={{
+                    width: isExpanded ? '100%' : moodGridWidth,
+                    maxWidth: isExpanded ? moodGridWidth : moodGridWidth,
+                    gap: MOOD_GRID_GAP,
+                    alignSelf: isExpanded ? 'stretch' : 'center',
+                  }}
+                >
+                  {rows.map((row, rowIdx) => {
+                    return (
+                      <View
+                        key={`mood-row-${rowIdx}`}
+                        style={{
+                          flexDirection: 'row',
+                          gap: MOOD_GRID_GAP,
+                          justifyContent: isExpanded ? 'flex-start' : 'space-between',
+                          flexWrap: 'nowrap',
+                          alignItems: 'stretch',
+                        }}
+                      >
+                        {row.map((item) => {
+                          const isSelected =
+                            (moodSelected?.energy ?? mood?.energy) === item.energy &&
+                            (moodSelected?.valence ?? mood?.valence) === item.valence;
 
-                  return (
-                    <View
-                      key={`mood-row-${rowIdx}`}
-                      style={{
-                        flexDirection: 'row',
-                        gap: MOOD_GRID_GAP,
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      {row.map((item) => {
-                        const isSelected =
-                          (moodSelected?.energy ?? mood?.energy) === item.energy &&
-                          (moodSelected?.valence ?? mood?.valence) === item.valence;
-
-                        return (
-                          <Pressable
-                            key={item.label}
-                            onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
-                            style={{
-                              width: moodCardWidth,
-                              borderRadius: radius.md,
-                              padding: spacing.md,
-                              backgroundColor: colors.surface,
-                              borderWidth: 1,
-                              borderColor: isSelected ? hexToRgba(colors.text, 0.25) : colors.border,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <View
+                          return (
+                            <Pressable
+                              key={item.label}
+                              onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
                               style={{
-                                width: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                height: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                borderRadius: 999,
-                                backgroundColor: item.color,
-                                opacity: 0.95,
-                              }}
-                            />
-                            <Text
-                              numberOfLines={3}
-                              style={{
-                                marginTop: spacing.md,
-                                color: colors.text,
-                                fontWeight: '900',
-                                textAlign: 'center',
-                                maxWidth: '100%',
-                                lineHeight: 19,
-                                fontSize: 14,
+                                width: moodCardWidth,
+                                borderRadius: radius.md,
+                                padding: spacing.md,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: isSelected ? hexToRgba(colors.text, 0.25) : colors.border,
+                                alignItems: 'center',
                               }}
                             >
-                              {item.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  );
-                })}
+                              <View
+                                style={{
+                                  width: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
+                                  height: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
+                                  borderRadius: 999,
+                                  backgroundColor: item.color,
+                                  opacity: 0.95,
+                                }}
+                              />
+                              <Text
+                                numberOfLines={3}
+                                style={{
+                                  marginTop: spacing.md,
+                                  color: colors.text,
+                                  fontWeight: '900',
+                                  textAlign: 'center',
+                                  maxWidth: '100%',
+                                  lineHeight: 19,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {item.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             );
@@ -1115,11 +1060,18 @@ export default function HoyScreen() {
       </Card>
 
       {/* Today summary */}
-      <Card
-        title="Tu día en 10 segundos"
-        subtitle={`Enfoque: ${focusText}`}
-        right={<Text style={{ fontSize: 44, fontWeight: '900', color: colors.primary, lineHeight: 48 }}>{score}</Text>}
-      >
+      <Card>
+        <View style={styles.cardHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Tu día en 10 segundos</Text>
+            <Text style={styles.cardSubtitle}>{`Enfoque: ${focusText}`}</Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 44, fontWeight: '900', color: colors.primary, lineHeight: 48 }}>{score}</Text>
+          </View>
+        </View>
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: isExpanded ? 'wrap' : 'nowrap' }}>
           {[
             { value: MODE_LABEL[mode], label: 'Modo' },
@@ -1161,16 +1113,17 @@ export default function HoyScreen() {
       </Card>
 
       {/* Nutrition */}
-      <Card
-        title="Nutrición de hoy"
-        subtitle={`Comidas: ${mealsSummary.mealsCount}`}
-        right={
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{mealsSummary.calories}</Text>
-            <Text style={{ color: colors.muted, fontWeight: '700' }}>/ {targets.calories} kcal</Text>
+      <Card>
+        <View style={styles.cardHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Nutrición de hoy</Text>
+            <Text style={styles.cardSubtitle}>{`Comidas: ${mealsSummary.mealsCount}`}</Text>
           </View>
-        }
-      >
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6, marginBottom: spacing.sm }}>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{mealsSummary.calories}</Text>
+          <Text style={{ color: colors.muted, fontWeight: '700' }}>/ {targets.calories} kcal</Text>
+        </View>
         <View style={{ gap: 10 }}>
           {[
             {
@@ -1271,7 +1224,13 @@ export default function HoyScreen() {
       </Card>
 
       {/* Plan */}
-      <Card title="Plan de hoy" subtitle={`3 acciones (fecha: ${todayKey})`}>
+      <Card>
+        <View style={styles.cardHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Plan de hoy</Text>
+            <Text style={styles.cardSubtitle}>{`3 acciones (fecha: ${todayKey})`}</Text>
+          </View>
+        </View>
         <View style={{ gap: 10 }}>
           {actions.map((t, i) => {
             const isOn = !!checked[i];
@@ -1317,6 +1276,6 @@ export default function HoyScreen() {
       </Card>
 
       <View style={{ height: 8 }} />
-    </ScrollView>
+    </Screen>
   );
 }
