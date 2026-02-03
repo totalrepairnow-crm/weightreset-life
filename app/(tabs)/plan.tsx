@@ -5,12 +5,14 @@ import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-nativ
 import { useRouter } from 'expo-router';
 
 const COLORS = {
-  bg: '#FFFFFF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  orange: '#FF6A00',
-  orangeSoft: '#FFE6D5',
+  bg: '#0B0F1A',
+  card: '#0F172A',
+  card2: '#111827',
+  text: '#F9FAFB',
+  muted: '#A1A1AA',
+  border: 'rgba(255,255,255,0.10)',
+  orange: '#F4D06F',
+  orangeSoft: 'rgba(244,208,111,0.16)',
 };
 
 type WeekPlan = {
@@ -458,7 +460,7 @@ export default function PlanScreen() {
   }, [editA1, editA2, editA3, editFocus, editTitle, week.focus, week.title, weekIndex]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 28, gap: 12 }}>
       <Text style={{ fontSize: 28, fontWeight: '900', color: COLORS.text }}>Plan</Text>
       <Text style={{ color: COLORS.muted }}>
         Un plan realista para México: comida local, porciones y hábitos. Sin castigos.
@@ -477,7 +479,7 @@ export default function PlanScreen() {
                 // fallback: no-op
               }
             }}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#fff' }}
+            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
           >
             <Text style={{ fontWeight: '900', color: COLORS.text }}>Abrir coach</Text>
           </Pressable>
@@ -568,7 +570,7 @@ export default function PlanScreen() {
                         setTodayDoneSaving(false);
                       }
                     }}
-                    style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#fff' }}
+                    style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
                     disabled={todayDoneSaving}
                   >
                     <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>
@@ -591,7 +593,7 @@ export default function PlanScreen() {
                     style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: COLORS.orange }}
                     disabled={todayDoneSaving}
                   >
-                    <Text style={{ color: 'white', fontWeight: '900', textAlign: 'center' }}>
+                    <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>
                       {todayDoneSaving ? '...' : 'Reiniciar'}
                     </Text>
                   </Pressable>
@@ -632,7 +634,7 @@ export default function PlanScreen() {
                     setTodayPlanLoading(false);
                   }
                 }}
-                style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#fff' }}
+                style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
                 disabled={todayPlanLoading}
               >
                 <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>{todayPlanLoading ? '...' : 'Limpiar'}</Text>
@@ -647,7 +649,7 @@ export default function PlanScreen() {
                 }}
                 style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: COLORS.orange }}
               >
-                <Text style={{ color: 'white', fontWeight: '900', textAlign: 'center' }}>Cómo generarlo</Text>
+                <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>Cómo generarlo</Text>
               </Pressable>
             </View>
           </View>
@@ -699,12 +701,12 @@ export default function PlanScreen() {
         <Input value={editA3} onChangeText={setEditA3} placeholder={week.dailyActions[2]} multiline />
 
         <Pressable onPress={save} style={{ marginTop: 14, backgroundColor: COLORS.orange, padding: 14, borderRadius: 14 }}>
-          <Text style={{ color: 'white', fontWeight: '900', textAlign: 'center' }}>Guardar y activar semana</Text>
+          <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>Guardar y activar semana</Text>
         </Pressable>
 
         <Pressable
           onPress={syncEditsFromWeek}
-          style={{ marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#fff' }}
+          style={{ marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
         >
           <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>Restaurar texto por defecto</Text>
         </Pressable>
@@ -745,7 +747,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: any }) {
   return (
     <View
       style={[
-        { backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16 },
+        { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16 },
         style,
       ]}
     >
@@ -771,6 +773,7 @@ function Input({
       onChangeText={onChangeText}
       placeholder={placeholder}
       multiline={multiline}
+      placeholderTextColor={COLORS.muted}
       style={{
         marginTop: 8,
         borderWidth: 1,
@@ -779,7 +782,7 @@ function Input({
         paddingHorizontal: 12,
         paddingVertical: 12,
         color: COLORS.text,
-        backgroundColor: '#fff',
+        backgroundColor: COLORS.card2,
       }}
     />
   );
@@ -819,7 +822,7 @@ function WeekPicker({
               borderRadius: 999,
               borderWidth: 1,
               borderColor: active ? COLORS.orange : COLORS.border,
-              backgroundColor: active ? COLORS.orangeSoft : '#fff',
+              backgroundColor: active ? COLORS.orangeSoft : COLORS.card2,
               opacity: isStoredActive ? 1 : 1,
             }}
           >

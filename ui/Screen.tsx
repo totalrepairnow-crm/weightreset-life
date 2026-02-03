@@ -1,27 +1,52 @@
-import React from "react";
-import { SafeAreaView, View, ViewStyle } from "react-native";
-import { useWRTheme } from "../theme/theme";
+import React from 'react';
+import { ScrollView, StyleSheet, ViewProps } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Props = {
-  children: React.ReactNode;
+type Edge = 'top' | 'bottom' | 'left' | 'right';
+
+type ScreenProps = ViewProps & {
+  scroll?: boolean;
+  /** When scroll=true, applies to ScrollView contentContainerStyle */
+  contentContainerStyle?: any;
+  /** Default true: adds horizontal padding */
   padded?: boolean;
-  style?: ViewStyle;
+  /** Default: ['top','bottom'] */
+  safeEdges?: Edge[];
+  children?: React.ReactNode;
 };
 
-export default function Screen({ children, padded = true, style }: Props) {
-  const { theme } = useWRTheme();
-  const pad = theme.spacing.lg;
+export default function Screen({
+  scroll,
+  style,
+  contentContainerStyle,
+  padded = true,
+  safeEdges = ['top', 'bottom'],
+  children,
+  ...rest
+}: ScreenProps) {
+  if (scroll) {
+    return (
+      <SafeAreaView edges={safeEdges} style={styles.flex}>
+        <ScrollView
+          {...rest}
+          style={[styles.flex, style]}
+          contentContainerStyle={[padded && styles.padded, contentContainerStyle]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <View
-        style={[
-          { flex: 1, backgroundColor: theme.colors.bg, paddingHorizontal: padded ? pad : 0 },
-          style,
-        ]}
-      >
-        {children}
-      </View>
+    <SafeAreaView edges={safeEdges} style={[styles.flex, padded && styles.padded, style]} {...rest}>
+      {children}
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  padded: { paddingHorizontal: 16 },
+});
