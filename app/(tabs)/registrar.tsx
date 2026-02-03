@@ -3,18 +3,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { isoDateKey } from '../../constants/date';
 import { evaluateAchievementsAfterSave } from '../../lib/achievements';
-
-const COLORS = {
-  bg: '#FFFFFF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  orange: '#FF6A00',
-  orangeSoft: '#FFE6D5',
-};
+import { useWRTheme } from '../../theme/theme';
+import Card from '../../ui/Card';
+import Screen from '../../ui/Screen';
+import Text from '../../ui/Text';
 
 const STORAGE_KEY_CHECKIN_PREFIX = 'wr_checkin_v1_';
 // Smart notification settings (shared with Perfil)
@@ -194,29 +189,44 @@ function Chip({
   label,
   active,
   onPress,
+  colors,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  colors: {
+    bg: string;
+    surface: string;
+    card: string;
+    text: string;
+    muted: string;
+    border: string;
+    primary: string;
+    accent2: string;
+    success: string;
+    warning: string;
+    danger: string;
+  };
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={{
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: active ? COLORS.orange : COLORS.border,
-        backgroundColor: active ? COLORS.orangeSoft : '#fff',
-      }}
+      style={[
+        styles.chip,
+        {
+          borderColor: active ? colors.primary : colors.border,
+          backgroundColor: active ? `${colors.primary}22` : colors.card,
+        },
+      ]}
     >
-      <Text style={{ fontWeight: '900', color: COLORS.text }}>{label}</Text>
+      <Text style={styles.chipText}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function RegistrarScreen() {
+  const { theme } = useWRTheme();
+  const colors = theme.colors;
   const params = useLocalSearchParams<{ focus?: FocusKey; date?: string; returnTo?: string }>();
   const focus = params?.focus;
 
@@ -250,7 +260,7 @@ export default function RegistrarScreen() {
     } catch {
       setCheckin((p) => ({ ...p, date: selectedKey }));
     }
-  }, [today, todayKey, selectedKey]);
+  }, [selectedKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -294,64 +304,180 @@ export default function RegistrarScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [checkin, today, todayKey, selectedKey, returnRoute]);
+  }, [checkin, selectedKey, returnRoute]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Registrar</Text>
-      <Text style={{ color: COLORS.muted }}>Fecha: {selectedKey}</Text>
+    <Screen
+      style={{ backgroundColor: colors.bg }}
+      contentContainerStyle={[styles.container]}
+    >
+      <View style={styles.topSpacer} />
+      <View style={styles.header}>
+        <Text style={styles.title}>Registrar</Text>
+        <Text style={styles.subtitle}>Fecha: {selectedKey}</Text>
+      </View>
 
-      <View style={{ borderWidth: 1, borderColor: focus === 'sueno' ? COLORS.orange : COLORS.border, borderRadius: 18, padding: 16, backgroundColor: focus === 'sueno' ? COLORS.orangeSoft : '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text, fontSize: 16 }}>Sueño (horas)</Text>
-        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Card
+        style={[
+          styles.section,
+          {
+            borderColor: focus === 'sueno' ? colors.primary : colors.border,
+            backgroundColor: focus === 'sueno' ? `${colors.primary}22` : colors.card,
+          },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Sueño (horas)</Text>
+        <View style={styles.chipRow}>
           {[0, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
-            <Chip key={h} label={`${h} h`} active={checkin.sueno_horas === h} onPress={() => setCheckin((p) => ({ ...p, sueno_horas: h }))} />
+            <Chip
+              key={h}
+              label={`${h} h`}
+              active={checkin.sueno_horas === h}
+              onPress={() => setCheckin((p) => ({ ...p, sueno_horas: h }))}
+              colors={colors}
+            />
           ))}
         </View>
-      </View>
+      </Card>
 
-      <View style={{ borderWidth: 1, borderColor: focus === 'estres' ? COLORS.orange : COLORS.border, borderRadius: 18, padding: 16, backgroundColor: focus === 'estres' ? COLORS.orangeSoft : '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text, fontSize: 16 }}>Estrés (1–5)</Text>
-        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Card
+        style={[
+          styles.section,
+          {
+            borderColor: focus === 'estres' ? colors.primary : colors.border,
+            backgroundColor: focus === 'estres' ? `${colors.primary}22` : colors.card,
+          },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Estrés (1–5)</Text>
+        <View style={styles.chipRow}>
           {[1, 2, 3, 4, 5].map((v) => (
-            <Chip key={v} label={`${v}`} active={checkin.estres === v} onPress={() => setCheckin((p) => ({ ...p, estres: v }))} />
+            <Chip
+              key={v}
+              label={`${v}`}
+              active={checkin.estres === v}
+              onPress={() => setCheckin((p) => ({ ...p, estres: v }))}
+              colors={colors}
+            />
           ))}
         </View>
-      </View>
+      </Card>
 
-      <View style={{ borderWidth: 1, borderColor: focus === 'antojos' ? COLORS.orange : COLORS.border, borderRadius: 18, padding: 16, backgroundColor: focus === 'antojos' ? COLORS.orangeSoft : '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text, fontSize: 16 }}>Antojos (0–3)</Text>
-        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Card
+        style={[
+          styles.section,
+          {
+            borderColor: focus === 'antojos' ? colors.primary : colors.border,
+            backgroundColor: focus === 'antojos' ? `${colors.primary}22` : colors.card,
+          },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Antojos (0–3)</Text>
+        <View style={styles.chipRow}>
           {[0, 1, 2, 3].map((v) => (
-            <Chip key={v} label={`${v}`} active={checkin.antojos === v} onPress={() => setCheckin((p) => ({ ...p, antojos: v }))} />
+            <Chip
+              key={v}
+              label={`${v}`}
+              active={checkin.antojos === v}
+              onPress={() => setCheckin((p) => ({ ...p, antojos: v }))}
+              colors={colors}
+            />
           ))}
         </View>
-      </View>
+      </Card>
 
-      <View style={{ borderWidth: 1, borderColor: focus === 'movimiento' ? COLORS.orange : COLORS.border, borderRadius: 18, padding: 16, backgroundColor: focus === 'movimiento' ? COLORS.orangeSoft : '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text, fontSize: 16 }}>Movimiento (min)</Text>
-        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Card
+        style={[
+          styles.section,
+          {
+            borderColor: focus === 'movimiento' ? colors.primary : colors.border,
+            backgroundColor: focus === 'movimiento' ? `${colors.primary}22` : colors.card,
+          },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Movimiento (min)</Text>
+        <View style={styles.chipRow}>
           {[0, 10, 20, 30, 45, 60, 90, 120, 150, 180].map((m) => (
-            <Chip key={m} label={`${m}`} active={checkin.movimiento_min === m} onPress={() => setCheckin((p) => ({ ...p, movimiento_min: m }))} />
+            <Chip
+              key={m}
+              label={`${m}`}
+              active={checkin.movimiento_min === m}
+              onPress={() => setCheckin((p) => ({ ...p, movimiento_min: m }))}
+              colors={colors}
+            />
           ))}
         </View>
-      </View>
+      </Card>
 
       <Pressable
         onPress={save}
         disabled={isSaving}
-        style={{
-          backgroundColor: COLORS.orange,
-          padding: 14,
-          borderRadius: 14,
-          opacity: isSaving ? 0.7 : 1,
-        }}
+        style={[
+          styles.saveButton,
+          { backgroundColor: colors.primary, opacity: isSaving ? 0.7 : 1 },
+        ]}
       >
-        <Text style={{ color: 'white', fontWeight: '900', textAlign: 'center' }}>
-          {isSaving ? 'Guardando…' : 'Guardar'}
-        </Text>
+        <Text style={styles.saveButtonText}>{isSaving ? 'Guardando…' : 'Guardar'}</Text>
       </Pressable>
-
-    </ScrollView>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+  },
+  topSpacer: {
+    height: 10,
+  },
+  header: {
+    paddingTop: 6,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 32,
+  },
+  subtitle: {
+    marginTop: 6,
+    opacity: 0.75,
+  },
+  section: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontWeight: '900',
+    fontSize: 16,
+  },
+  chipRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  chip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  chipText: {
+    fontWeight: '900',
+  },
+  saveButton: {
+    marginTop: 6,
+    padding: 14,
+    borderRadius: 14,
+  },
+  saveButtonText: {
+    color: 'white',
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+});
