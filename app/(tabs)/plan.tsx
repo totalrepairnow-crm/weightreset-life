@@ -1,18 +1,32 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, TextInput, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-const COLORS = {
-  bg: '#0B0F1A',
-  card: '#0F172A',
-  card2: '#111827',
-  text: '#F9FAFB',
-  muted: '#A1A1AA',
-  border: 'rgba(255,255,255,0.10)',
-  orange: '#F4D06F',
-  orangeSoft: 'rgba(244,208,111,0.16)',
+import { useWRTheme } from '../../theme/theme';
+// UI primitives (support both default and named exports)
+import CardImport from '../../ui/Card';
+import ScreenImport from '../../ui/Screen';
+import TextImport from '../../ui/Text';
+
+// Fallback to named export if default is not used in the module
+const Card: any = (CardImport as any)?.default ?? (CardImport as any)?.Card ?? CardImport;
+const Screen: any = (ScreenImport as any)?.default ?? (ScreenImport as any)?.Screen ?? ScreenImport;
+const Text: any = (TextImport as any)?.default ?? (TextImport as any)?.Text ?? TextImport;
+
+const DEFAULT_COLORS = {
+  bg: '#0B0F14',
+  surface: '#0F141C',
+  card: '#121826',
+  text: '#FFFFFF',
+  muted: '#9CA3AF',
+  border: '#1F2937',
+  primary: '#E7C66B',
+  accent2: '#22C55E',
+  success: '#22C55E',
+  warning: '#F59E0B',
+  danger: '#EF4444',
 };
 
 type WeekPlan = {
@@ -321,6 +335,9 @@ async function setActiveWeek(payload: ActiveWeekPayload) {
 
 export default function PlanScreen() {
   const router = useRouter();
+  const { theme } = useWRTheme();
+  const colors = theme?.colors ?? DEFAULT_COLORS;
+  const spacing = theme?.spacing ?? { xs: 6, sm: 10, md: 14, lg: 18, xl: 24 };
   const [mode, setMode] = useState<PlanMode>('balance');
   const [weekIndex, setWeekIndex] = useState(0);
   const baseWeek = useMemo(() => WEEKS[weekIndex], [weekIndex]);
@@ -460,16 +477,29 @@ export default function PlanScreen() {
   }, [editA1, editA2, editA3, editFocus, editTitle, week.focus, week.title, weekIndex]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 28, gap: 12 }}>
-      <Text style={{ fontSize: 28, fontWeight: '900', color: COLORS.text }}>Plan</Text>
-      <Text style={{ color: COLORS.muted }}>
+    <Screen scroll contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}>
+      {/* DEBUG: if you don't see this, you're not running this file */}
+      <View
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 999,
+          alignSelf: 'flex-start',
+          backgroundColor: colors.primary,
+        }}
+      >
+        <Text style={{ color: colors.bg, fontWeight: '900' }}>PLAN v2 (theme)</Text>
+      </View>
+
+      <Text style={{ fontSize: 28, fontWeight: '900' }}>Plan</Text>
+      <Text style={{ color: colors.muted }}>
         Un plan realista para México: comida local, porciones y hábitos. Sin castigos.
       </Text>
 
       {/* Plan de hoy (del coach) card */}
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🤖 Plan de hoy (del coach)</Text>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>🤖 Plan de hoy (del coach)</Text>
           <Pressable
             onPress={() => {
               // abre la pestaña Coach para regenerar / ajustar el plan
@@ -479,29 +509,36 @@ export default function PlanScreen() {
                 // fallback: no-op
               }
             }}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
           >
-            <Text style={{ fontWeight: '900', color: COLORS.text }}>Abrir coach</Text>
+            <Text style={{ fontWeight: '900', color: colors.text }}>Abrir coach</Text>
           </Pressable>
         </View>
 
         {todayPlan ? (
           <View style={{ marginTop: 10 }}>
-            <Text style={{ color: COLORS.muted }}>
+            <Text style={{ color: colors.muted }}>
               {todayPlan.date ? `Fecha: ${todayPlan.date}` : `Fecha: ${todayKeyLocal()}`}
               {todayPlan.mode ? ` · Modo: ${MODE_LABEL[safeMode(todayPlan.mode)]}` : ''}
               {todayPlan.saved_at ? ` · Guardado: ${formatSavedAt(todayPlan.saved_at)}` : ''}
             </Text>
 
             {todayPlan.title ? (
-              <Text style={{ marginTop: 10, fontSize: 16, fontWeight: '900', color: COLORS.text }}>{todayPlan.title}</Text>
+              <Text style={{ marginTop: 10, fontSize: 16, fontWeight: '900', color: colors.text }}>{todayPlan.title}</Text>
             ) : null}
 
             {Array.isArray(todayPlan.actions) && todayPlan.actions.length ? (
               <View style={{ marginTop: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <Text style={{ fontWeight: '900', color: COLORS.text }}>Acciones clave</Text>
-                  <Text style={{ color: COLORS.muted, fontWeight: '800' }}>
+                  <Text style={{ fontWeight: '900', color: colors.text }}>Acciones clave</Text>
+                  <Text style={{ color: colors.muted, fontWeight: '800' }}>
                     {todayDone.filter(Boolean).length}/{todayPlan.actions.length} hechas
                   </Text>
                 </View>
@@ -531,20 +568,20 @@ export default function PlanScreen() {
                           height: 22,
                           borderRadius: 6,
                           borderWidth: 2,
-                          borderColor: checked ? COLORS.orange : COLORS.border,
-                          backgroundColor: checked ? COLORS.orangeSoft : '#fff',
+                          borderColor: checked ? colors.primary : colors.border,
+                          backgroundColor: checked ? 'rgba(231,198,107,0.16)' : '#fff',
                           alignItems: 'center',
                           justifyContent: 'center',
                           marginTop: 2,
                         }}
                       >
-                        <Text style={{ color: checked ? COLORS.orange : COLORS.muted, fontWeight: '900' }}>
+                        <Text style={{ color: checked ? colors.primary : colors.muted, fontWeight: '900' }}>
                           {checked ? '✓' : ''}
                         </Text>
                       </View>
                       <Text
                         style={{
-                          color: COLORS.text,
+                          color: colors.text,
                           fontWeight: '600',
                           flex: 1,
                           textDecorationLine: checked ? 'line-through' : 'none',
@@ -570,10 +607,10 @@ export default function PlanScreen() {
                         setTodayDoneSaving(false);
                       }
                     }}
-                    style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
+                    style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
                     disabled={todayDoneSaving}
                   >
-                    <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>
+                    <Text style={{ color: colors.text, fontWeight: '900', textAlign: 'center' }}>
                       {todayDoneSaving ? '...' : 'Marcar todo'}
                     </Text>
                   </Pressable>
@@ -590,24 +627,24 @@ export default function PlanScreen() {
                         setTodayDoneSaving(false);
                       }
                     }}
-                    style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: COLORS.orange }}
+                    style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: colors.primary }}
                     disabled={todayDoneSaving}
                   >
-                    <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>
+                    <Text style={{ color: colors.bg, fontWeight: '900', textAlign: 'center' }}>
                       {todayDoneSaving ? '...' : 'Reiniciar'}
                     </Text>
                   </Pressable>
                 </View>
               </View>
             ) : (
-              <Text style={{ marginTop: 10, color: COLORS.muted }}>
+              <Text style={{ marginTop: 10, color: colors.muted }}>
                 Aún no hay un plan guardado. Entra a Coach y pídele: “Hazme un plan para hoy”.
               </Text>
             )}
 
             {todayPlan.meals ? (
               <View style={{ marginTop: 10 }}>
-                <Text style={{ fontWeight: '900', color: COLORS.text }}>Comidas sugeridas</Text>
+                <Text style={{ fontWeight: '900', color: colors.text }}>Comidas sugeridas</Text>
                 {todayPlan.meals.desayuno ? <Bullet text={`Desayuno: ${todayPlan.meals.desayuno}`} /> : null}
                 {todayPlan.meals.comida ? <Bullet text={`Comida: ${todayPlan.meals.comida}`} /> : null}
                 {todayPlan.meals.cena ? <Bullet text={`Cena: ${todayPlan.meals.cena}`} /> : null}
@@ -617,7 +654,7 @@ export default function PlanScreen() {
               </View>
             ) : null}
 
-            {todayPlan.notes ? <Text style={{ marginTop: 10, color: COLORS.muted }}>{todayPlan.notes}</Text> : null}
+            {todayPlan.notes ? <Text style={{ marginTop: 10, color: colors.muted }}>{todayPlan.notes}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
               <Pressable
@@ -634,10 +671,10 @@ export default function PlanScreen() {
                     setTodayPlanLoading(false);
                   }
                 }}
-                style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
+                style={{ flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
                 disabled={todayPlanLoading}
               >
-                <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>{todayPlanLoading ? '...' : 'Limpiar'}</Text>
+                <Text style={{ color: colors.text, fontWeight: '900', textAlign: 'center' }}>{todayPlanLoading ? '...' : 'Limpiar'}</Text>
               </Pressable>
 
               <Pressable
@@ -647,114 +684,102 @@ export default function PlanScreen() {
                     'En Coach, pídele: “Dame un plan para hoy con desayuno, comida, cena y 3 acciones”. Luego vuelve aquí.'
                   );
                 }}
-                style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: COLORS.orange }}
+                style={{ flex: 1, padding: 12, borderRadius: 14, backgroundColor: colors.primary }}
               >
-                <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>Cómo generarlo</Text>
+                <Text style={{ color: colors.bg, fontWeight: '900', textAlign: 'center' }}>Cómo generarlo</Text>
               </Pressable>
             </View>
           </View>
         ) : (
-          <Text style={{ marginTop: 10, color: COLORS.muted }}>
+          <Text style={{ marginTop: 10, color: colors.muted }}>
             Aún no hay un plan guardado. Entra a Coach y pídele: “Hazme un plan para hoy”.
           </Text>
         )}
       </Card>
 
       <Card>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🎯 Modo actual</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
-          {MODE_LABEL[mode]} · Objetivo diario: <Text style={{ fontWeight: '900', color: COLORS.text }}>{targets.calories} kcal</Text> ·{' '}
-          <Text style={{ fontWeight: '900', color: COLORS.text }}>{targets.protein_g}g proteína</Text>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>🎯 Modo actual</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>
+          {MODE_LABEL[mode]} · Objetivo diario: <Text style={{ fontWeight: '900', color: colors.text }}>{targets.calories} kcal</Text> ·{' '}
+          <Text style={{ fontWeight: '900', color: colors.text }}>{targets.protein_g}g proteína</Text>
         </Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
-          Nota: cambia el modo en <Text style={{ fontWeight: '900', color: COLORS.text }}>Perfil</Text> cuando quieras.
+        <Text style={{ marginTop: 6, color: colors.muted }}>
+          Nota: cambia el modo en <Text style={{ fontWeight: '900', color: colors.text }}>Perfil</Text> cuando quieras.
         </Text>
       </Card>
 
-      <Card style={{ backgroundColor: COLORS.orangeSoft, borderColor: COLORS.orangeSoft }}>
-        <Text style={{ color: COLORS.text, fontWeight: '800' }}>Tu meta semanal</Text>
-        <Text style={{ marginTop: 8, color: COLORS.text, fontWeight: '700' }}>{weeklyGoal.title}</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>{weeklyGoal.detail}</Text>
+      <Card style={{ backgroundColor: 'rgba(231,198,107,0.16)', borderColor: 'rgba(231,198,107,0.16)' }}>
+        <Text style={{ color: colors.text, fontWeight: '800' }}>Tu meta semanal</Text>
+        <Text style={{ marginTop: 8, color: colors.text, fontWeight: '700' }}>{weeklyGoal.title}</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>{weeklyGoal.detail}</Text>
       </Card>
 
       <WeekPicker value={weekIndex} onChange={onChangeWeek} activeIndex={activeWeekIndex} />
 
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>{week.title}</Text>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{week.title}</Text>
           {isActive ? (
-            <View style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: COLORS.orangeSoft, borderWidth: 1, borderColor: COLORS.orange }}>
-              <Text style={{ fontWeight: '900', color: COLORS.text }}>Activa</Text>
+            <View style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(231,198,107,0.16)', borderWidth: 1, borderColor: colors.primary }}>
+              <Text style={{ fontWeight: '900', color: colors.text }}>Activa</Text>
             </View>
           ) : null}
         </View>
 
-        <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>Título (editable)</Text>
+        <Text style={{ marginTop: 10, fontWeight: '900', color: colors.text }}>Título (editable)</Text>
         <Input value={editTitle} onChangeText={setEditTitle} placeholder={week.title} />
 
-        <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>Enfoque (editable)</Text>
+        <Text style={{ marginTop: 10, fontWeight: '900', color: colors.text }}>Enfoque (editable)</Text>
         <Input value={editFocus} onChangeText={setEditFocus} placeholder={week.focus} />
 
-        <Text style={{ marginTop: 14, fontWeight: '900', color: COLORS.text }}>Acciones diarias (3) (editable)</Text>
+        <Text style={{ marginTop: 14, fontWeight: '900', color: colors.text }}>Acciones diarias (3) (editable)</Text>
         <Input value={editA1} onChangeText={setEditA1} placeholder={week.dailyActions[0]} multiline />
         <Input value={editA2} onChangeText={setEditA2} placeholder={week.dailyActions[1]} multiline />
         <Input value={editA3} onChangeText={setEditA3} placeholder={week.dailyActions[2]} multiline />
 
-        <Pressable onPress={save} style={{ marginTop: 14, backgroundColor: COLORS.orange, padding: 14, borderRadius: 14 }}>
-          <Text style={{ color: '#0B0F1A', fontWeight: '900', textAlign: 'center' }}>Guardar y activar semana</Text>
+        <Pressable onPress={save} style={{ marginTop: 14, backgroundColor: colors.primary, padding: 14, borderRadius: 14 }}>
+          <Text style={{ color: colors.bg, fontWeight: '900', textAlign: 'center' }}>Guardar y activar semana</Text>
         </Pressable>
 
         <Pressable
           onPress={syncEditsFromWeek}
-          style={{ marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card2 }}
+          style={{ marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
         >
-          <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>Restaurar texto por defecto</Text>
+          <Text style={{ color: colors.text, fontWeight: '900', textAlign: 'center' }}>Restaurar texto por defecto</Text>
         </Pressable>
       </Card>
 
       <Card>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Menú guía (elige 1 por sección)</Text>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>Menú guía (elige 1 por sección)</Text>
         <Section title="Desayunos" items={week.meals.desayunos} />
         <Section title="Comidas" items={week.meals.comidas} />
         <Section title="Cenas" items={week.meals.cenas} />
         <Section title="Snacks (si hace falta)" items={week.meals.snacks} />
-        <Text style={{ marginTop: 10, color: COLORS.muted }}>Tip: regla del plato: ½ verduras, ¼ proteína, ¼ carbo.</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+        <Text style={{ marginTop: 10, color: colors.muted }}>Tip: regla del plato: ½ verduras, ¼ proteína, ¼ carbo.</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>
           Porciones por modo: {mode === 'agresiva' ? 'carbo porción chica (1 tortilla o ½ taza arroz)' : mode === 'mantenimiento' ? 'carbo normal (2 tortillas o 1 taza arroz) si tienes actividad' : 'carbo moderado (1–2 tortillas o ¾ taza arroz)' }.
         </Text>
       </Card>
 
       <Card>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Lista del súper</Text>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>Lista del súper</Text>
         {week.grocery.map((t) => (
           <Bullet key={t} text={t} />
         ))}
       </Card>
 
       <Card>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Intercambios inteligentes</Text>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>Intercambios inteligentes</Text>
         {week.swaps.map((t) => (
           <Bullet key={t} text={t} />
         ))}
       </Card>
 
-      <Text style={{ color: COLORS.muted }}>Objetivo: sentirte ligero, fuerte y con energía para disfrutar tu vida.</Text>
-    </ScrollView>
+      <Text style={{ color: colors.muted }}>Objetivo: sentirte ligero, fuerte y con energía para disfrutar tu vida.</Text>
+    </Screen>
   );
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: any }) {
-  return (
-    <View
-      style={[
-        { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16 },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
 
 function Input({
   value,
@@ -773,16 +798,16 @@ function Input({
       onChangeText={onChangeText}
       placeholder={placeholder}
       multiline={multiline}
-      placeholderTextColor={COLORS.muted}
+      placeholderTextColor={DEFAULT_COLORS.muted}
       style={{
         marginTop: 8,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: DEFAULT_COLORS.border,
         borderRadius: 14,
         paddingHorizontal: 12,
         paddingVertical: 12,
-        color: COLORS.text,
-        backgroundColor: COLORS.card2,
+        color: DEFAULT_COLORS.text,
+        backgroundColor: DEFAULT_COLORS.card,
       }}
     />
   );
@@ -791,8 +816,8 @@ function Input({
 function Bullet({ text }: { text: string }) {
   return (
     <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-      <Text style={{ color: COLORS.orange, fontWeight: '900' }}>•</Text>
-      <Text style={{ color: COLORS.text, fontWeight: '600', flex: 1 }}>{text}</Text>
+      <Text style={{ color: DEFAULT_COLORS.primary, fontWeight: '900' }}>•</Text>
+      <Text style={{ color: DEFAULT_COLORS.text, fontWeight: '600', flex: 1 }}>{text}</Text>
     </View>
   );
 }
@@ -821,12 +846,12 @@ function WeekPicker({
               paddingHorizontal: 12,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: active ? COLORS.orange : COLORS.border,
-              backgroundColor: active ? COLORS.orangeSoft : COLORS.card2,
+              borderColor: active ? DEFAULT_COLORS.primary : DEFAULT_COLORS.border,
+              backgroundColor: active ? 'rgba(231,198,107,0.16)' : DEFAULT_COLORS.card,
               opacity: isStoredActive ? 1 : 1,
             }}
           >
-            <Text style={{ color: COLORS.text, fontWeight: '800' }}>
+            <Text style={{ color: DEFAULT_COLORS.text, fontWeight: '800' }}>
               {label}{isStoredActive ? ' ✓' : ''}
             </Text>
           </Pressable>
@@ -839,7 +864,7 @@ function WeekPicker({
 function Section({ title, items }: { title: string; items: string[] }) {
   return (
     <View style={{ marginTop: 14 }}>
-      <Text style={{ fontWeight: '900', color: COLORS.text }}>{title}</Text>
+      <Text style={{ fontWeight: '900', color: DEFAULT_COLORS.text }}>{title}</Text>
       {items.map((t) => (
         <Bullet key={title + t} text={t} />
       ))}
