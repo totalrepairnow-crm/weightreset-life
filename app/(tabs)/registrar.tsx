@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import * as Notifications from 'expo-notifications';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -10,6 +9,23 @@ import { useWRTheme } from '../../theme/theme';
 import Card from '../../ui/Card';
 import Screen from '../../ui/Screen';
 import Text from '../../ui/Text';
+
+let Notifications: any = {
+  AndroidImportance: { DEFAULT: 'default', MAX: 'max' },
+  AndroidNotificationVisibility: { PUBLIC: 'public' },
+  setNotificationChannelAsync: async () => {},
+  getPermissionsAsync: async () => ({ granted: false, status: 'denied' }),
+  requestPermissionsAsync: async () => ({ granted: false, status: 'denied' }),
+  cancelScheduledNotificationAsync: async () => {},
+  scheduleNotificationAsync: async () => '',
+};
+if (Platform.OS !== 'web') {
+  try {
+    Notifications = require('expo-notifications');
+  } catch {
+    // Keep no-op fallback when native notifications are unavailable.
+  }
+}
 
 const STORAGE_KEY_CHECKIN_PREFIX = 'wr_checkin_v1_';
 // Smart notification settings (shared with Perfil)

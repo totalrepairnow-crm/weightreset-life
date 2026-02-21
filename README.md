@@ -25,6 +25,59 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Coach STT over LAN (Android físico)
+
+1. Obtener IP LAN del host (Mac):
+
+   ```bash
+   ipconfig getifaddr en0 || ipconfig getifaddr en1
+   ```
+
+2. Configurar variables:
+
+   Root Expo (`/Users/smith/weightreset-life/.env`):
+
+   ```bash
+   EXPO_PUBLIC_AI_BASE_URL=http://TU_IP_LAN:3000
+   ```
+
+   Backend (`/Users/smith/weightreset-life/weightreset-ai/.env.local`):
+
+   ```bash
+   OPENAI_API_KEY=sk-...
+   OPENAI_MODEL=gpt-4.1-mini
+   ```
+
+3. Correr backend:
+
+   ```bash
+   cd weightreset-ai
+   npm run dev -- --hostname 0.0.0.0 --port 3000
+   ```
+
+4. Correr app Expo (en otra terminal):
+
+   ```bash
+   npm start
+   ```
+
+5. Probar transcribe end-to-end con audio real:
+
+   Generar WAV de prueba (macOS):
+
+   ```bash
+   say -o /tmp/wr-stt.aiff "hola esta es una prueba de transcripcion"
+   afconvert -f WAVE -d LEI16 /tmp/wr-stt.aiff /tmp/wr-stt.wav
+   ```
+
+   Probar endpoint:
+
+   ```bash
+   curl -F "file=@/tmp/wr-stt.wav;type=audio/wav" http://TU_IP_LAN:3000/api/voice/transcribe
+   ```
+
+   Debe responder `200` y `data.text`.
+
 ## Get a fresh project
 
 When you're ready, run:

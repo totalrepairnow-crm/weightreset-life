@@ -1,21 +1,51 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, Text, View } from 'react-native';
 import type { UnlockedAchievement } from '../../constants/achievements';
 import { getAchievements } from '../../lib/achievements';
+import { useWRTheme } from '../../theme/theme';
+import Screen from '../../ui/Screen';
 
-const COLORS = {
-  bg: '#FFFFFF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  orange: '#FF6A00',
-  orangeSoft: '#FFE6D5',
+let Notifications: any = {
+  AndroidImportance: { DEFAULT: 'default', MAX: 'max' },
+  AndroidNotificationVisibility: { PUBLIC: 'public' },
+  setNotificationChannelAsync: async () => {},
+  getPermissionsAsync: async () => ({ granted: false, status: 'denied' }),
+  requestPermissionsAsync: async () => ({ granted: false, status: 'denied' }),
+  cancelAllScheduledNotificationsAsync: async () => {},
+  cancelScheduledNotificationAsync: async () => {},
+  scheduleNotificationAsync: async () => '',
+  getAllScheduledNotificationsAsync: async () => [],
 };
+if (Platform.OS !== 'web') {
+  try {
+    Notifications = require('expo-notifications');
+  } catch {
+    // Keep no-op fallback when native notifications are unavailable.
+  }
+}
+
+
+// Fallback palette (in case theme isn't available for any reason)
+const DEFAULT_COLORS = {
+  bg: '#0B0F14',
+  surface: '#0F141C',
+  card: '#121826',
+  text: '#FFFFFF',
+  muted: '#9CA3AF',
+  border: '#1F2937',
+  primary: '#E7C66B',
+  accent2: '#22C55E',
+  success: '#22C55E',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+};
+
+const DEFAULT_RADIUS = { xs: 10, sm: 14, md: 18, lg: 22, xl: 28 };
+const DEFAULT_SPACING = { xs: 6, sm: 10, md: 14, lg: 18, xl: 24 };
 
 const STORAGE_NOTIF_ENABLED = 'wr_notif_enabled_v1';
 const STORAGE_NOTIF_HOUR = 'wr_notif_hour_v1';
@@ -335,6 +365,9 @@ async function scheduleSmartTomorrow(hour: number, minute: number) {
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { theme } = useWRTheme();
+  const colors = theme?.colors ?? DEFAULT_COLORS;
+
   return (
     <Pressable
       onPress={onPress}
@@ -343,16 +376,20 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
         paddingHorizontal: 14,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? COLORS.orange : COLORS.border,
-        backgroundColor: active ? COLORS.orangeSoft : '#fff',
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primary : colors.card,
       }}
     >
-      <Text style={{ fontWeight: '900', color: COLORS.text }}>{label}</Text>
+      <Text style={{ fontWeight: '900', color: active ? colors.bg : colors.text }}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function PerfilScreen() {
+  const { theme } = useWRTheme();
+  const colors = theme?.colors ?? DEFAULT_COLORS;
+  const radius = theme?.radius ?? DEFAULT_RADIUS;
+  const spacing = theme?.spacing ?? DEFAULT_SPACING;
   const [enabled, setEnabled] = useState(false);
   const [hour, setHour] = useState(20);
   const [minute, setMinute] = useState(0);
@@ -598,20 +635,24 @@ export default function PerfilScreen() {
   }, [profile]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Perfil</Text>
-      <Text style={{ color: COLORS.muted }}>Ajustes de recordatorios y preferencias.</Text>
+    <Screen
+      scroll
+      style={{ backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }}
+    >
+      <Text style={{ fontSize: 30, fontWeight: '900', color: colors.text }}>Perfil</Text>
+      <Text style={{ color: colors.muted }}>Ajustes de recordatorios y preferencias.</Text>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>👤 Tu perfil</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>👤 Tu perfil</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>
           {profileName ? `Hola, ${profileName}.` : 'Completa tu perfil para personalizar el Coach, Plan y métricas.'}
         </Text>
 
         {profileSummary ? (
-          <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>{profileSummary}</Text>
+          <Text style={{ marginTop: 10, fontWeight: '900', color: colors.text }}>{profileSummary}</Text>
         ) : (
-          <Text style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay datos guardados.</Text>
+          <Text style={{ marginTop: 10, color: colors.muted }}>Aún no hay datos guardados.</Text>
         )}
 
         <Pressable
@@ -619,8 +660,8 @@ export default function PerfilScreen() {
           style={{
             marginTop: 12,
             padding: 12,
-            borderRadius: 14,
-            backgroundColor: COLORS.orange,
+            borderRadius: radius.sm,
+            backgroundColor: colors.primary,
           }}
         >
           <Text style={{ textAlign: 'center', fontWeight: '900', color: 'white' }}>
@@ -628,18 +669,18 @@ export default function PerfilScreen() {
           </Text>
         </Pressable>
 
-        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+        <Text style={{ marginTop: 10, color: colors.muted, fontSize: 12 }}>
           Tip: tu nombre se usará para que el Coach te hable de forma más personal.
         </Text>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🎯 Modo</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>🎯 Modo</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>
           Elige tu objetivo. Se aplicará a tu Plan, Coach y recomendaciones.
         </Text>
 
-        <Text style={{ marginTop: 10, fontWeight: '900', color: COLORS.text }}>Actual: {MODE_LABEL[mode]}</Text>
+        <Text style={{ marginTop: 10, fontWeight: '900', color: colors.text }}>Actual: {MODE_LABEL[mode]}</Text>
 
         <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           <Chip label="Agresiva" active={mode === 'agresiva'} onPress={() => setModePreset('agresiva')} />
@@ -647,27 +688,27 @@ export default function PerfilScreen() {
           <Chip label="Mantenimiento" active={mode === 'mantenimiento'} onPress={() => setModePreset('mantenimiento')} />
         </View>
 
-        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+        <Text style={{ marginTop: 10, color: colors.muted, fontSize: 12 }}>
           Nota: puedes cambiarlo cuando quieras.
         </Text>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Recordatorio diario</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>Check-in para cerrar tu día en 30 segundos.</Text>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>Recordatorio diario</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>Check-in para cerrar tu día en 30 segundos.</Text>
 
         <Pressable
           onPress={toggle}
           style={{
             marginTop: 12,
             padding: 14,
-            borderRadius: 14,
-            backgroundColor: enabled ? COLORS.orange : '#fff',
+            borderRadius: radius.sm,
+            backgroundColor: enabled ? colors.primary : colors.card,
             borderWidth: 1,
-            borderColor: enabled ? COLORS.orange : COLORS.border,
+            borderColor: enabled ? colors.primary : colors.border,
           }}
         >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: enabled ? 'white' : COLORS.text }}>
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: enabled ? 'white' : colors.text }}>
             {enabled ? 'Activado' : 'Activar'}
           </Text>
         </Pressable>
@@ -678,18 +719,18 @@ export default function PerfilScreen() {
             style={{
               marginTop: 10,
               padding: 12,
-              borderRadius: 14,
+              borderRadius: radius.sm,
               borderWidth: 1,
-              borderColor: COLORS.border,
-              backgroundColor: '#fff',
+              borderColor: colors.border,
+              backgroundColor: colors.card,
             }}
           >
-            <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Desactivar</Text>
+            <Text style={{ textAlign: 'center', fontWeight: '900', color: colors.text }}>Desactivar</Text>
           </Pressable>
         ) : null}
 
-        <Text style={{ marginTop: 14, fontWeight: '900', color: COLORS.text }}>Hora</Text>
-        <Text style={{ marginTop: 4, color: COLORS.muted }}>Actual: {timeLabel}</Text>
+        <Text style={{ marginTop: 14, fontWeight: '900', color: colors.text }}>Hora</Text>
+        <Text style={{ marginTop: 4, color: colors.muted }}>Actual: {timeLabel}</Text>
 
         <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           <Chip label="7:00 PM" active={hour === 19 && minute === 0} onPress={() => setTimePreset(19, 0)} />
@@ -702,23 +743,23 @@ export default function PerfilScreen() {
           style={{
             marginTop: 14,
             padding: 12,
-            borderRadius: 14,
+            borderRadius: radius.sm,
             borderWidth: 1,
-            borderColor: COLORS.border,
-            backgroundColor: '#fff',
+            borderColor: colors.border,
+            backgroundColor: colors.card,
           }}
         >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Enviar prueba</Text>
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: colors.text }}>Enviar prueba</Text>
         </Pressable>
 
-        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+        <Text style={{ marginTop: 10, color: colors.muted, fontSize: 12 }}>
           Programadas: {scheduledCount} · Nota: en algunos Android la entrega puede variar por ahorro de batería.
         </Text>
 
-        <View style={{ marginTop: 16, height: 1, backgroundColor: COLORS.border }} />
+        <View style={{ marginTop: 16, height: 1, backgroundColor: colors.border }} />
 
-        <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '900', color: COLORS.text }}>Notificación inteligente</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
+        <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '900', color: colors.text }}>Notificación inteligente</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>
           Basada en tu check-in de hoy. Se programa para mañana si el riesgo de antojos es medio/alto.
         </Text>
 
@@ -727,19 +768,19 @@ export default function PerfilScreen() {
           style={{
             marginTop: 12,
             padding: 14,
-            borderRadius: 14,
-            backgroundColor: smartEnabled ? COLORS.orange : '#fff',
+            borderRadius: radius.sm,
+            backgroundColor: smartEnabled ? colors.primary : colors.card,
             borderWidth: 1,
-            borderColor: smartEnabled ? COLORS.orange : COLORS.border,
+            borderColor: smartEnabled ? colors.primary : colors.border,
           }}
         >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: smartEnabled ? 'white' : COLORS.text }}>
+          <Text style={{ textAlign: 'center', fontWeight: '900', color: smartEnabled ? 'white' : colors.text }}>
             {smartEnabled ? 'Inteligente activada' : 'Activar inteligente'}
           </Text>
         </Pressable>
 
-        <Text style={{ marginTop: 14, fontWeight: '900', color: COLORS.text }}>Hora (inteligente)</Text>
-        <Text style={{ marginTop: 4, color: COLORS.muted }}>Actual: {fmtTime(smartHour, smartMinute)}</Text>
+        <Text style={{ marginTop: 14, fontWeight: '900', color: colors.text }}>Hora (inteligente)</Text>
+        <Text style={{ marginTop: 4, color: colors.muted }}>Actual: {fmtTime(smartHour, smartMinute)}</Text>
 
         <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           <Chip label="2:00 PM" active={smartHour === 14 && smartMinute === 0} onPress={() => setSmartTimePreset(14, 0)} />
@@ -748,16 +789,16 @@ export default function PerfilScreen() {
         </View>
 
         {smartStatus ? (
-          <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>{smartStatus}</Text>
+          <Text style={{ marginTop: 10, color: colors.muted, fontSize: 12 }}>{smartStatus}</Text>
         ) : null}
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>🏅 Logros</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>Se desbloquean automáticamente con tus check-ins.</Text>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>🏅 Logros</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>Se desbloquean automáticamente con tus check-ins.</Text>
 
         {achievements.length === 0 ? (
-          <Text style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay logros. Haz un check-in para empezar.</Text>
+          <Text style={{ marginTop: 10, color: colors.muted }}>Aún no hay logros. Haz un check-in para empezar.</Text>
         ) : (
           <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {achievements.map((a) => (
@@ -773,23 +814,23 @@ export default function PerfilScreen() {
                   paddingVertical: 10,
                   paddingHorizontal: 12,
                   borderRadius: 999,
-                  backgroundColor: COLORS.orangeSoft,
+                  backgroundColor: colors.surface,
                   borderWidth: 1,
-                  borderColor: COLORS.border,
+                  borderColor: colors.border,
                 }}
               >
-                <Text style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</Text>
+                <Text style={{ fontWeight: '900', color: colors.text }}>{a.title}</Text>
               </Pressable>
             ))}
           </View>
         )}
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Siguiente</Text>
-        <Text style={{ marginTop: 8, color: COLORS.muted }}>• Insights (patrones de sueño/estrés/antojos)</Text>
-        <Text style={{ marginTop: 4, color: COLORS.muted }}>• Calendario mensual</Text>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>Siguiente</Text>
+        <Text style={{ marginTop: 8, color: colors.muted }}>• Insights (patrones de sueño/estrés/antojos)</Text>
+        <Text style={{ marginTop: 4, color: colors.muted }}>• Calendario mensual</Text>
       </View>
-    </ScrollView>
+    </Screen>
   );
 }

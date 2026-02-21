@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   addMeal,
@@ -17,15 +17,9 @@ import {
   MealEntry,
   todayKey,
 } from '../../lib/food';
+import { useWRTheme } from '../../theme/theme';
+import Screen from '../../ui/Screen';
 
-const COLORS = {
-  bg: '#FFFFFF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  orange: '#FF6A00',
-  orangeSoft: '#FFE6D5',
-};
 
 const STORAGE_MODE = 'wr_mode_v1';
 
@@ -62,6 +56,116 @@ export default function ComidasScreen() {
   const params = useLocalSearchParams<{ scannedBarcode?: string | string[] }>();
 
   const totals = useMemo(() => computeDayTotals(meals), [meals]);
+
+  const { theme } = useWRTheme();
+  const colors = theme?.colors ?? {
+    bg: '#0B0F14',
+    surface: '#0F141C',
+    card: '#121826',
+    text: '#FFFFFF',
+    muted: '#9CA3AF',
+    border: '#1F2937',
+    primary: '#E7C66B',
+    accent2: '#22C55E',
+    success: '#22C55E',
+    warning: '#F59E0B',
+    danger: '#EF4444',
+  };
+  const spacing = theme?.spacing ?? { xs: 6, sm: 10, md: 14, lg: 18, xl: 24 };
+  const radius = theme?.radius ?? { xs: 10, sm: 14, md: 18, lg: 22, xl: 28 };
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        screen: { flex: 1, backgroundColor: colors.bg },
+        content: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
+
+        title: { fontSize: 30, fontWeight: '900', color: colors.text },
+        subtitle: { color: colors.muted },
+
+        card: {
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          padding: spacing.md,
+          backgroundColor: colors.card,
+        },
+
+        busyCard: {
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          padding: spacing.md,
+          backgroundColor: colors.surface,
+        },
+        busyTitle: { fontWeight: '900', color: colors.text },
+        busyBody: { marginTop: spacing.xs, color: colors.muted },
+
+        hint: { color: colors.muted, fontSize: 12 },
+
+        kpiTitle: { fontWeight: '900', color: colors.text },
+        kpiRow: { marginTop: spacing.xs, color: colors.text, fontWeight: '800' },
+
+        buttonPrimary: {
+          backgroundColor: colors.primary,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.sm,
+          opacity: 1,
+          alignItems: 'center',
+        },
+        buttonPrimaryDisabled: { opacity: 0.55 },
+        buttonPrimaryText: { color: '#0B0F14', fontWeight: '900', textAlign: 'center' },
+
+        buttonSecondary: {
+          backgroundColor: colors.card,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.sm,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center',
+        },
+        buttonSecondaryDisabled: { opacity: 0.55 },
+        buttonSecondaryText: { color: colors.text, fontWeight: '900', textAlign: 'center' },
+
+        input: {
+          marginTop: spacing.sm,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
+          padding: spacing.sm,
+          color: colors.text,
+          backgroundColor: colors.surface,
+        },
+
+        sectionTitle: { marginTop: spacing.xs, fontSize: 18, fontWeight: '900', color: colors.text },
+
+        mealCard: {
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          padding: spacing.md,
+          backgroundColor: colors.card,
+        },
+        mealTitle: { fontWeight: '900', color: colors.text },
+        mealMeta: { marginTop: spacing.xs, color: colors.muted },
+        mealHighlights: { marginTop: spacing.sm, color: colors.text, fontWeight: '700' },
+
+        aiDetails: {
+          marginTop: spacing.md,
+          padding: spacing.md,
+          borderRadius: radius.sm,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        aiDetailsTitle: { fontWeight: '900', color: colors.text },
+        aiDetailsItem: { marginTop: spacing.xs, color: colors.text },
+        aiDetailsNotes: { marginTop: spacing.sm, color: colors.muted },
+      }),
+    [colors, spacing, radius]
+  );
 
   const refresh = useCallback(async () => {
     setMeals(await listMeals(dateKey));
@@ -535,111 +639,85 @@ export default function ComidasScreen() {
     Alert.alert('✅ Barcode guardado', `Score: ${analysis.score}/100`);
   }, [barcode, dateKey, refresh, mode]);
 
+  const Button = (props: { label: string; onPress: () => void; variant?: 'primary' | 'secondary'; disabled?: boolean }) => {
+    const variant = props.variant ?? 'primary';
+    const isPrimary = variant === 'primary';
+    return (
+      <Pressable
+        disabled={!!props.disabled}
+        onPress={props.onPress}
+        style={({ pressed }) => [
+          isPrimary ? styles.buttonPrimary : styles.buttonSecondary,
+          props.disabled ? (isPrimary ? styles.buttonPrimaryDisabled : styles.buttonSecondaryDisabled) : null,
+          pressed ? { transform: [{ scale: 0.99 }], opacity: 0.9 } : null,
+        ]}
+      >
+        <Text style={isPrimary ? styles.buttonPrimaryText : styles.buttonSecondaryText}>{props.label}</Text>
+      </Pressable>
+    );
+  };
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Comidas</Text>
-      <Text style={{ color: COLORS.muted }}>Fecha: {dateKey}</Text>
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 12, backgroundColor: '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text }}>🎯 Modo: {MODE_LABEL[mode]}</Text>
-        <Text style={{ marginTop: 6, color: COLORS.muted }}>
-          Meta diaria: <Text style={{ fontWeight: '900', color: COLORS.text }}>{targets.calories} kcal</Text> ·{' '}
-          <Text style={{ fontWeight: '900', color: COLORS.text }}>{targets.protein_g}g proteína</Text>
+    <Screen scroll style={styles.screen} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Comidas</Text>
+      <Text style={styles.subtitle}>Fecha: {dateKey}</Text>
+
+      <View style={styles.card}>
+        <Text style={styles.kpiTitle}>🎯 Modo: {MODE_LABEL[mode]}</Text>
+        <Text style={[styles.subtitle, { marginTop: spacing.xs }]}
+        >
+          Meta diaria:{' '}
+          <Text style={{ fontWeight: '900', color: colors.text }}>{targets.calories} kcal</Text> ·{' '}
+          <Text style={{ fontWeight: '900', color: colors.text }}>{targets.protein_g}g proteína</Text>
         </Text>
       </View>
 
       {busy ? (
-        <View style={{ padding: 12, borderRadius: 12, backgroundColor: COLORS.orangeSoft, borderWidth: 1, borderColor: COLORS.border }}>
-          <Text style={{ fontWeight: '900', color: COLORS.text }}>⏳ {busyMsg || 'Procesando...'}</Text>
-          <Text style={{ marginTop: 6, color: COLORS.muted }}>Esto puede tardar 5–20s dependiendo de la imagen.</Text>
+        <View style={styles.busyCard}>
+          <Text style={styles.busyTitle}>⏳ {busyMsg || 'Procesando...'}</Text>
+          <Text style={styles.busyBody}>Esto puede tardar 5–20s dependiendo de la imagen.</Text>
         </View>
       ) : null}
 
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-        AI server (debe abrir en tu Android): {AI_BASE_URL}
-      </Text>
+      <Text style={styles.hint}>AI server (debe abrir en tu Android): {AI_BASE_URL}</Text>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 14, backgroundColor: '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text }}>
-          Totales del día (estimados) · {MODE_LABEL[mode]}
-        </Text>
-        <Text style={{ marginTop: 6, color: COLORS.text, fontWeight: '800' }}>
+      <View style={styles.card}>
+        <Text style={styles.kpiTitle}>Totales del día (estimados) · {MODE_LABEL[mode]}</Text>
+        <Text style={styles.kpiRow}>
           {Math.round(totals.calories)} kcal · P {Math.round(totals.protein_g)}g · C {Math.round(totals.carbs_g)}g · G {Math.round(totals.fat_g)}g
         </Text>
       </View>
 
-      <Pressable
-        disabled={busy}
-        onPress={() => addFromPhoto('camera')}
-        style={{ backgroundColor: busy ? '#F59E0B' : COLORS.orange, padding: 14, borderRadius: 14, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: 'white', fontWeight: '900', textAlign: 'center' }}>📸 Tomar foto de comida</Text>
-      </Pressable>
+      <Button disabled={busy} label="📸 Tomar foto de comida" onPress={() => addFromPhoto('camera')} />
+      <Button disabled={busy} variant="secondary" label="🖼️ Elegir foto de comida (galería)" onPress={() => addFromPhoto('library')} />
+      <Button disabled={busy} variant="secondary" label="🏷️ Tomar foto de etiqueta" onPress={() => addFromLabel('camera')} />
+      <Button disabled={busy} variant="secondary" label="🖼️ Elegir etiqueta (galería)" onPress={() => addFromLabel('library')} />
 
-      <Pressable
-        disabled={busy}
-        onPress={() => addFromPhoto('library')}
-        style={{ backgroundColor: '#fff', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>🖼️ Elegir foto de comida (galería)</Text>
-      </Pressable>
+      <View style={styles.card}>
+        <Text style={styles.kpiTitle}>🔢 Barcode / UPC</Text>
 
-      <Pressable
-        disabled={busy}
-        onPress={() => addFromLabel('camera')}
-        style={{ backgroundColor: '#fff', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>🏷️ Tomar foto de etiqueta</Text>
-      </Pressable>
-
-      <Pressable
-        disabled={busy}
-        onPress={() => addFromLabel('library')}
-        style={{ backgroundColor: '#fff', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: COLORS.text, fontWeight: '900', textAlign: 'center' }}>🖼️ Elegir etiqueta (galería)</Text>
-      </Pressable>
-
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 12, backgroundColor: '#fff' }}>
-        <Text style={{ fontWeight: '900', color: COLORS.text }}>🔢 Barcode / UPC</Text>
-        <Pressable
+        <Button
+          variant="secondary"
+          label="📷 Escanear barcode"
           onPress={() => router.push({ pathname: '/barcode-scan', params: { returnPath: '/(tabs)/comidas' } })}
-          style={{
-            marginTop: 10,
-            paddingVertical: 12,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            backgroundColor: '#fff',
-          }}
-        >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>📷 Escanear barcode</Text>
-        </Pressable>
+        />
+
         <TextInput
           value={barcode}
           onChangeText={setBarcode}
           placeholder="Ej: 041196912395"
-          style={{ marginTop: 10, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12 }}
+          placeholderTextColor={colors.muted}
+          style={styles.input}
         />
-        <Pressable
-          onPress={addFromBarcode}
-          style={{
-            marginTop: 10,
-            backgroundColor: COLORS.orangeSoft,
-            padding: 12,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-          }}
-        >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Guardar barcode</Text>
-        </Pressable>
+
+        <Button variant="secondary" label="Guardar barcode" onPress={addFromBarcode} />
       </View>
 
-      <Text style={{ marginTop: 6, fontSize: 18, fontWeight: '900', color: COLORS.text }}>Historial de hoy</Text>
+      <Text style={styles.sectionTitle}>Historial de hoy</Text>
 
       {meals.map((m) => (
-        <View key={m.id} style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, backgroundColor: '#fff' }}>
-          <Text style={{ fontWeight: '900', color: COLORS.text }}>
+        <View key={m.id} style={styles.mealCard}>
+          <Text style={styles.mealTitle}>
             {m.source === 'photo'
               ? '📸 Foto'
               : m.source === 'label'
@@ -649,32 +727,28 @@ export default function ComidasScreen() {
               : '✍️ Manual'}{' '}
             · {(m.analysis as any)?.isAI ? 'AI' : 'Estimado'} · Score {m.analysis.score}/100
           </Text>
-          <Text style={{ marginTop: 6, color: COLORS.muted }}>
+
+          <Text style={styles.mealMeta}>
             {Math.round(m.analysis.totals.calories)} kcal · P {Math.round(m.analysis.totals.protein_g)}g · C {Math.round(m.analysis.totals.carbs_g)}g · G {Math.round(m.analysis.totals.fat_g)}g
           </Text>
-          {m.analysis.highlights?.length ? (
-            <Text style={{ marginTop: 8, color: COLORS.text, fontWeight: '700' }}>{m.analysis.highlights.slice(0, 2).join(' ')}</Text>
-          ) : null}
+
+          {m.analysis.highlights?.length ? <Text style={styles.mealHighlights}>{m.analysis.highlights.slice(0, 2).join(' ')}</Text> : null}
 
           {Array.isArray((m.analysis as any).items) && (m.analysis as any).items.length ? (
-            <View style={{ marginTop: 10, padding: 10, borderRadius: 12, backgroundColor: COLORS.orangeSoft, borderWidth: 1, borderColor: COLORS.border }}>
-              <Text style={{ fontWeight: '900', color: COLORS.text }}>
-                🤖 Detalles {((m.analysis as any).raw ? '(AI)' : '(Estimado)')}
-              </Text>
+            <View style={styles.aiDetails}>
+              <Text style={styles.aiDetailsTitle}>🤖 Detalles {((m.analysis as any).raw ? '(AI)' : '(Estimado)')}</Text>
               {(m.analysis as any).items.slice(0, 3).map((it: any, idx: number) => (
-                <Text key={`${m.id}-it-${idx}`} style={{ marginTop: 6, color: COLORS.text }}>
+                <Text key={`${m.id}-it-${idx}`} style={styles.aiDetailsItem}>
                   • {it?.name || 'Item'}{it?.qty ? ` (${it.qty})` : ''}
                 </Text>
               ))}
-              {(m.analysis as any).notes ? (
-                <Text style={{ marginTop: 8, color: COLORS.muted }}>{String((m.analysis as any).notes)}</Text>
-              ) : null}
+              {(m.analysis as any).notes ? <Text style={styles.aiDetailsNotes}>{String((m.analysis as any).notes)}</Text> : null}
             </View>
           ) : null}
         </View>
       ))}
 
-      {!meals.length ? <Text style={{ color: COLORS.muted }}>Aún no hay comidas registradas hoy.</Text> : null}
-    </ScrollView>
+      {!meals.length ? <Text style={styles.subtitle}>Aún no hay comidas registradas hoy.</Text> : null}
+    </Screen>
   );
 }

@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "permissions": [
         "RECORD_AUDIO"
       ],

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
+import * as Device from "expo-device";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -48,6 +49,7 @@ const PROFILE_KEY = "wr_profile_v1";
 const MODE_KEY = "wr_mode_v1";
 
 const TTS_VOICE_KEY = "wr_tts_voice_v1";
+const COACH_VOICE_KEY = "wr_coach_voice_v1";
 const TTS_RATE_KEY = "wr_tts_rate_v1";
 const TTS_ENABLED_KEY = "wr_tts_enabled_v1";
 
@@ -56,6 +58,10 @@ const TTS_PITCH_KEY = "wr_tts_pitch_v1";
 const AI_BASE_URL_KEY = "wr_ai_base_url_v1";
 const CHECKLIST_COLLAPSED_KEY = "wr_checklist_collapsed_v1";
 const PLAN_TODAY_KEY = "wr_plan_today_v1";
+const REQUIRED_AI_BASE_URL_MSG =
+  "Configura EXPO_PUBLIC_AI_BASE_URL (ej. http://192.168.X.X:3000) en .env y reinicia Expo.";
+const AI_PROBE_TIMEOUT_MS = 2200;
+const aiReachabilityCache = new Map<string, boolean>();
 
 // Daily checklist (per day)
 const DAILY_TASKS_KEY_PREFIX = "wr_daily_tasks_v1"; // stored as `${prefix}:${YYYY-MM-DD}`
@@ -156,46 +162,142 @@ function inferLanHostFromExpo(): string | null {
   try {
     // Common places depending on Expo runtime
     const anyC: any = Constants as any;
-    const hostUri: string | undefined = anyC?.expoConfig?.hostUri || anyC?.manifest2?.extra?.expoClient?.hostUri;
-    const debuggerHost: string | undefined = anyC?.manifest?.debuggerHost || anyC?.expoConfig?.debuggerHost;
+    const candidates: string[] = [
+      anyC?.expoConfig?.hostUri,
+      anyC?.manifest2?.extra?.expoClient?.hostUri,
+      anyC?.manifest?.debuggerHost,
+      anyC?.expoConfig?.debuggerHost,
+      anyC?.linkingUri,
+      anyC?.experienceUrl,
+    ].filter((v: any) => typeof v === "string" && !!String(v).trim()) as string[];
 
-    const raw = hostUri || debuggerHost;
-    if (!raw) return null;
-
-    // raw examples:
-    // - "192.168.1.243:8081"
-    // - "192.168.1.243:19000"
-    // - "exp://192.168.1.243:8081"
-    const cleaned = String(raw).replace(/^exp:\/\//, "");
-    const host = cleaned.split("/")[0].split(":")[0];
-    return host || null;
+    for (const raw of candidates) {
+      // raw examples:
+      // - "192.168.1.243:8081"
+      // - "exp://192.168.1.243:8081"
+      // - "exp://192.168.1.243:8081/--/"
+      const cleaned = String(raw).replace(/^exp:\/\//, "").replace(/^https?:\/\//, "");
+      const host = cleaned.split("/")[0].split(":")[0];
+      if (!host) continue;
+      if (host === "localhost" || host === "127.0.0.1") continue;
+      return host;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-async function getCoachApiBaseUrl(): Promise<string> {
-  // Allow overriding via AsyncStorage or env (useful for production)
-  const override = await AsyncStorage.getItem(AI_BASE_URL_KEY);
-  if (override && override.trim()) return override.trim().replace(/\/+$/, "");
+function sanitizeAiBaseUrl(v: string): string {
+  const cleaned = String(v || "").trim().replace(/\/+$/, "");
+  if (!cleaned) return "";
+  if (/TU_IP|192\.168\.X\.X/i.test(cleaned)) return "";
+  return cleaned;
+}
 
+async function canReachAiBaseUrl(base: string): Promise<boolean> {
+  const safe = sanitizeAiBaseUrl(base);
+  if (!safe) return false;
+  const cached = aiReachabilityCache.get(safe);
+  if (typeof cached === "boolean") return cached;
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), AI_PROBE_TIMEOUT_MS);
+  try {
+    // GET on this route should return 405 when the server is reachable.
+    const res = await fetch(`${safe}/api/voice/transcribe`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    const ok = res.status === 405 || (res.status >= 200 && res.status < 500);
+    aiReachabilityCache.set(safe, ok);
+    return ok;
+  } catch {
+    aiReachabilityCache.set(safe, false);
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function readEnvAiBaseUrl(): string {
   const env =
     typeof process !== "undefined" &&
     (process as any)?.env &&
     typeof (process as any).env.EXPO_PUBLIC_AI_BASE_URL === "string"
       ? (process as any).env.EXPO_PUBLIC_AI_BASE_URL
       : "";
+  return sanitizeAiBaseUrl(env);
+}
 
-  if (env && env.trim()) return env.trim().replace(/\/+$/, "");
+function shouldForceEnvAiBaseUrlOnAndroidDevice() {
+  // Physical Android device: localhost is never the host machine.
+  return Platform.OS === "android" && !!(Device as any)?.isDevice;
+}
 
-  const host = inferLanHostFromExpo();
-  if (host) return `http://${host}:3000`;
+async function getCoachApiBaseUrl(): Promise<string> {
+  const isPhysicalAndroid = shouldForceEnvAiBaseUrlOnAndroidDevice();
+  const inferredHost = inferLanHostFromExpo();
+  const inferredBase = inferredHost ? `http://${inferredHost}:3000` : "";
 
-  // Last resort: localhost (only works on emulators, not physical devices)
-  return "http://localhost:3000";
+  // Allow overriding via AsyncStorage or env (useful for production)
+  const override = await AsyncStorage.getItem(AI_BASE_URL_KEY);
+  const cleanedOverride = sanitizeAiBaseUrl(override || "");
+
+  const env = readEnvAiBaseUrl();
+
+  // Prefer explicit config first.
+  const configured = cleanedOverride || env;
+  if (!isPhysicalAndroid) {
+    if (configured) return configured;
+    if (inferredBase) return inferredBase;
+    return "http://localhost:3000";
+  }
+
+  // Physical Android: if explicit URL is stale/unreachable, auto-fallback to inferred LAN host.
+  if (configured) {
+    const reachable = await canReachAiBaseUrl(configured);
+    if (reachable) return configured;
+    if (inferredBase && inferredBase !== configured) {
+      const inferredReachable = await canReachAiBaseUrl(inferredBase);
+      if (inferredReachable) return inferredBase;
+    }
+    return configured;
+  }
+
+  if (inferredBase) {
+    const inferredReachable = await canReachAiBaseUrl(inferredBase);
+    if (inferredReachable) return inferredBase;
+  }
+
+  return "";
 }
 
 type CoachHistoryMsg = { role: "user" | "assistant"; content: string };
+
+function inferAudioUploadMeta(uri: string): { name: string; type: string } {
+  const clean = String(uri || "").split("?")[0];
+  const ext = (clean.split(".").pop() || "").toLowerCase();
+
+  const extToMime: Record<string, string> = {
+    m4a: "audio/m4a",
+    mp4: "audio/mp4",
+    wav: "audio/wav",
+    aac: "audio/aac",
+    caf: "audio/caf",
+  };
+
+  const safeExt = extToMime[ext] ? ext : "m4a";
+  return {
+    name: `recording.${safeExt}`,
+    type: extToMime[safeExt],
+  };
+}
+
+function extractUrlFromHint(hint: string): string {
+  const match = String(hint || "").match(/https?:\/\/[^\s]+/i);
+  return match ? match[0].replace(/\/+$/, "") : "";
+}
 
 async function callCoachAI(params: {
   message: string;
@@ -205,8 +307,9 @@ async function callCoachAI(params: {
   meals: MealsSummary;
   targets: NutritionTargets;
   history: Msg[];
+  baseUrl?: string | null;
 }): Promise<{ reply: string; intent?: string; plan?: any } | null> {
-  const { message, mode, profileRaw, derivedName, meals, targets, history } = params;
+  const { message, mode, profileRaw, derivedName, meals, targets, history, baseUrl } = params;
 
   // Build a compact history for the model (last ~16 msgs, keeps it coherent without bloating tokens)
   const recent = history.slice(-16).map((m) => ({
@@ -250,7 +353,8 @@ async function callCoachAI(params: {
     history: recent,
   };
 
-  const base = await getCoachApiBaseUrl();
+  const base = baseUrl && baseUrl.trim() ? baseUrl.trim().replace(/\/+$/, "") : await getCoachApiBaseUrl();
+  if (!base) return null;
   const url = `${base}/api/coach/chat`;
 
   // Timeout protection
@@ -1059,6 +1163,7 @@ export default function CoachScreen() {
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
   const [ttsVoiceId, setTtsVoiceId] = useState<string | null>(null);
+  const ttsVoiceIdRef = useRef<string | null>(null);
   const [ttsRate, setTtsRate] = useState<number>(0.98);
   const [ttsPitch, setTtsPitch] = useState<number>(1.0);
 
@@ -1071,6 +1176,9 @@ export default function CoachScreen() {
   });
 
   const insets = useSafeAreaInsets();
+  const floatingTabBarHeight = 64;
+  const floatingTabBarOffset = Math.max(10, insets.bottom + 8);
+  const composerBottomOffset = floatingTabBarHeight + floatingTabBarOffset + 6;
   const inputBarExtraBottom = insets.bottom;
   const inputBarHeight = 56;
 
@@ -1134,7 +1242,7 @@ export default function CoachScreen() {
         const arr: any[] = Array.isArray(parsed) ? parsed : [];
         const safe: Msg[] = arr
           .filter(Boolean)
-          .map((m: any) => ({
+          .map((m: any): Msg => ({
             id: String(m.id || uid()),
             role: m.role === "user" ? "user" : "coach",
             text: String(m.text || ""),
@@ -1204,8 +1312,8 @@ export default function CoachScreen() {
 
     (async () => {
       try {
-        const [savedVoice, savedRate, savedPitch, savedAiBase, savedTtsEnabled, savedChecklistCollapsed] = await Promise.all([
-          AsyncStorage.getItem(TTS_VOICE_KEY),
+        const [savedVoiceRaw, savedRate, savedPitch, savedAiBase, savedTtsEnabled, savedChecklistCollapsed] = await Promise.all([
+          AsyncStorage.getItem(COACH_VOICE_KEY),
           AsyncStorage.getItem(TTS_RATE_KEY),
           AsyncStorage.getItem(TTS_PITCH_KEY),
           AsyncStorage.getItem(AI_BASE_URL_KEY),
@@ -1213,23 +1321,48 @@ export default function CoachScreen() {
           AsyncStorage.getItem(CHECKLIST_COLLAPSED_KEY),
         ]);
 
-        // Hint: inferred LAN host (best effort)
+        // Migrate voice from legacy key if new key is still empty
+        let savedVoice = savedVoiceRaw;
+        if (!savedVoice) {
+          const legacyVoice = await AsyncStorage.getItem(TTS_VOICE_KEY);
+          if (legacyVoice) {
+            savedVoice = legacyVoice;
+            try { await AsyncStorage.setItem(COACH_VOICE_KEY, legacyVoice); } catch {}
+          }
+        }
+
+        const envAiBase = readEnvAiBaseUrl();
+        const requiresExplicitLan = shouldForceEnvAiBaseUrlOnAndroidDevice();
+
+        // Hint shown in the server modal.
         const inferredHost = inferLanHostFromExpo();
-        if (inferredHost) {
+        if (requiresExplicitLan && inferredHost) {
+          setAiHint(`Auto detectado (LAN): http://${inferredHost}:3000 · También puedes fijar EXPO_PUBLIC_AI_BASE_URL`);
+        } else if (requiresExplicitLan) {
+          setAiHint("Configura EXPO_PUBLIC_AI_BASE_URL. Ejemplo: http://TU_IP:3000");
+        } else if (inferredHost) {
           setAiHint(`Sugerido (LAN): http://${inferredHost}:3000`);
         } else {
           setAiHint("Sugerido (LAN): http://TU_IP:3000");
         }
 
-        if (savedAiBase && savedAiBase.trim()) {
-          const cleaned = savedAiBase.trim().replace(/\/+$/, "");
-          setAiBaseUrl(cleaned);
-          setAiBaseUrlDraft(cleaned);
+        const resolvedBase = await getCoachApiBaseUrl();
+        const cleanedSaved = sanitizeAiBaseUrl(savedAiBase || "");
+        const fallbackDraft = cleanedSaved || envAiBase || (inferredHost ? `http://${inferredHost}:3000` : "");
+        setAiBaseUrl(resolvedBase);
+        setAiBaseUrlDraft(resolvedBase || fallbackDraft);
+        if (resolvedBase) {
+          setSttError("");
+          if (cleanedSaved && cleanedSaved !== resolvedBase) {
+            await AsyncStorage.removeItem(AI_BASE_URL_KEY);
+          }
+        } else if (requiresExplicitLan) {
+          setSttError(REQUIRED_AI_BASE_URL_MSG);
         }
 
         if (!alive) return;
 
-        if (savedVoice) setTtsVoiceId(savedVoice);
+        if (savedVoice) { ttsVoiceIdRef.current = savedVoice; setTtsVoiceId(savedVoice); }
         if (savedRate && !Number.isNaN(Number(savedRate))) setTtsRate(Number(savedRate));
         if (savedPitch && !Number.isNaN(Number(savedPitch))) setTtsPitch(Number(savedPitch));
         if (savedTtsEnabled != null) {
@@ -1271,8 +1404,9 @@ export default function CoachScreen() {
             spanish.find((v: any) => String(v?.language || "").toLowerCase() === "es-mx") ||
             spanish[0];
           if (best?.identifier) {
+            ttsVoiceIdRef.current = best.identifier;
             setTtsVoiceId(best.identifier);
-            await AsyncStorage.setItem(TTS_VOICE_KEY, best.identifier);
+            await AsyncStorage.setItem(COACH_VOICE_KEY, best.identifier);
           }
         }
       } catch {
@@ -1416,6 +1550,10 @@ export default function CoachScreen() {
 
       // Pull the raw profile so the AI can use name/sexo/edad/etc if present
       const profileRaw = await AsyncStorage.getItem(PROFILE_KEY);
+      const resolvedBase = await getCoachApiBaseUrl();
+      if (!resolvedBase && shouldForceEnvAiBaseUrlOnAndroidDevice()) {
+        setVoiceError(REQUIRED_AI_BASE_URL_MSG);
+      }
 
       // 1) Try AI
       const ai = await callCoachAI({
@@ -1426,6 +1564,7 @@ export default function CoachScreen() {
         meals: ms,
         targets: nextTargets,
         history: baseNext,
+        baseUrl: resolvedBase,
       });
 
       // 2) Fallback: local basic coach
@@ -1520,7 +1659,7 @@ export default function CoachScreen() {
         Speech.stop?.();
         Speech.speak(safe, {
           language: "es-MX",
-          voice: (overrideVoiceId ?? ttsVoiceId) || undefined,
+          voice: (overrideVoiceId ?? ttsVoiceIdRef.current) || undefined,
           rate: ttsRate,
           pitch: ttsPitch,
           onError: () => {
@@ -1531,45 +1670,101 @@ export default function CoachScreen() {
         setVoiceError("🔊 No se pudo reproducir voz en este dispositivo/build.");
       }
     },
-    [sanitizeForTTS, speakEnabled, ttsVoiceId, ttsRate, ttsPitch]
+    [sanitizeForTTS, speakEnabled, ttsRate, ttsPitch]
   );
 
   async function transcribeAudioUri(uri: string): Promise<string | null> {
+    let resolvedBase = "";
     try {
-      const base = await getCoachApiBaseUrl();
-      const url = `${base}/api/voice/transcribe`;
-
-      const form = new FormData();
-      // React Native requires a file-like object
-      form.append(
-        "audio",
-        {
-          uri,
-          name: "audio.m4a",
-          type: "audio/m4a",
-        } as any
-      );
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000);
-
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          body: form,
-          signal: controller.signal,
-          // NOTE: do NOT set Content-Type; RN will set the multipart boundary
-        });
-
-        const json = await res.json().catch(() => null);
-        if (!res.ok) return null;
-
-        const text = json?.data?.text ?? json?.text;
-        return typeof text === "string" && text.trim() ? text.trim() : null;
-      } finally {
-        clearTimeout(timeout);
+      resolvedBase = await getCoachApiBaseUrl();
+      if (!resolvedBase) {
+        setSttError(REQUIRED_AI_BASE_URL_MSG);
+        return null;
       }
-    } catch {
+      const url = `${resolvedBase}/api/voice/transcribe`;
+
+      const audioMeta = inferAudioUploadMeta(uri);
+      const normalizedUri = /^(file|content):\/\//i.test(uri) ? uri : `file://${uri}`;
+      const makeForm = (field: "file" | "audio") => {
+        const form = new FormData();
+        // React Native requires a file-like object
+        form.append(
+          field,
+          {
+            uri: normalizedUri,
+            name: audioMeta.name,
+            type: audioMeta.type,
+          } as any
+        );
+        return form;
+      };
+
+      let res: Response | null = null;
+      let firstError: any = null;
+
+      // Attempt 1: preferred field + timeout
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 45000);
+        try {
+          res = await fetch(url, {
+            method: "POST",
+            body: makeForm("file"),
+            signal: controller.signal,
+            // NOTE: do NOT set Content-Type; RN sets multipart boundary
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch (err: any) {
+        firstError = err;
+      }
+
+      // Attempt 2 (fallback): no abort signal + alternate field name
+      if (!res) {
+        try {
+          res = await fetch(url, {
+            method: "POST",
+            body: makeForm("audio"),
+          });
+        } catch (err: any) {
+          throw err || firstError;
+        }
+      }
+
+      const raw = await res.text().catch(() => "");
+      let json: any = null;
+      try {
+        json = raw ? JSON.parse(raw) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok) {
+        const detail =
+          typeof json?.error === "string"
+            ? json.error
+            : raw && raw.length < 240
+            ? raw
+            : `Error ${res.status}`;
+        setSttError(`No pude transcribir: ${detail}`);
+        return null;
+      }
+
+      const text = json?.data?.text ?? json?.text;
+      return typeof text === "string" && text.trim() ? text.trim() : null;
+    } catch (err: any) {
+      const rawMsg = String(err?.message || err || "");
+      const msg = rawMsg.toLowerCase();
+      if (msg.includes("cleartext") || msg.includes("not permitted")) {
+        setSttError(
+          "Android está bloqueando HTTP (cleartext). Reinstala el dev build con cleartext habilitado o usa HTTPS."
+        );
+      } else if (resolvedBase) {
+        setSttError(`No pude conectar con ${resolvedBase}. Verifica que el backend esté en la misma red y puerto 3000.`);
+      } else {
+        setSttError("No pude transcribir por un problema de red.");
+      }
       return null;
     }
   }
@@ -1731,15 +1926,13 @@ export default function CoachScreen() {
 
         const text = await transcribeAudioUri(uri);
         if (!text) {
-          setSttError("No pude transcribir el audio. Intenta de nuevo.");
+          setSttError((prev) => prev || "No pude transcribir el audio. Intenta de nuevo.");
           setSttStatus("idle");
           return;
         }
 
-        // Send immediately
-        setInput("");
-        await send(text);
         setSttStatus("idle");
+        await send(text);
       } catch {
         setSttError("Falló la transcripción. Intenta de nuevo.");
         setSttStatus("idle");
@@ -1747,7 +1940,7 @@ export default function CoachScreen() {
     } finally {
       stoppingRef.current = false;
     }
-  }, [send]);
+  }, [scrollToBottom]);
 
   // Keep latest stopRecording in a ref (used by auto-stop handler)
   useEffect(() => {
@@ -1791,38 +1984,30 @@ export default function CoachScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Coach</Text>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={async () => {
-                  const current = (await AsyncStorage.getItem(AI_BASE_URL_KEY)) || "";
-                  const cleaned = current.trim().replace(/\/+$/, "");
-                  setAiBaseUrl(cleaned);
-                  setAiBaseUrlDraft(cleaned || aiHint.replace("Sugerido (LAN): ", ""));
-                  setServerModalOpen(true);
-                }}
-                style={styles.serverBtn}
-              >
-                <Text style={styles.serverBtnText}>Servidor</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={resetChat}
-                style={[styles.serverBtn, styles.resetBtn]}
-                disabled={loading || sttBusy}
-              >
-                <Text style={styles.resetBtnText}>Nuevo</Text>
-              </Pressable>
-            </View>
+            <Pressable onLongPress={resetChat} delayLongPress={650} hitSlop={6}>
+              <Text style={styles.title}>Coach</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.sub}>
             Modo: {MODE_LABEL[mode]} · Hoy: {mealsSummary.mealsCount} comidas · {mealsSummary.calories}/{targets.calories} kcal
           </Text>
 
-          <Text style={styles.baseLine}>
-            AI: {aiBaseUrl ? aiBaseUrl : "Auto (LAN)"}
-          </Text>
+          <Pressable
+            onLongPress={async () => {
+              const current = (await AsyncStorage.getItem(AI_BASE_URL_KEY)) || "";
+              const cleaned = sanitizeAiBaseUrl(current);
+              setAiBaseUrl(cleaned);
+              setAiBaseUrlDraft(cleaned || extractUrlFromHint(aiHint));
+              setServerModalOpen(true);
+            }}
+            delayLongPress={700}
+            hitSlop={4}
+          >
+            <Text style={styles.baseLine}>
+              AI: {aiBaseUrl ? aiBaseUrl : shouldForceEnvAiBaseUrlOnAndroidDevice() ? "Falta EXPO_PUBLIC_AI_BASE_URL" : "Auto (LAN)"}
+            </Text>
+          </Pressable>
 
           {loading ? (
             <View style={styles.thinkingHeaderRow}>
@@ -1870,7 +2055,7 @@ export default function CoachScreen() {
                 <Pressable
                   onPress={async () => {
                     // Save
-                    const cleaned = (aiBaseUrlDraft || "").trim().replace(/\/+$/, "");
+                    const cleaned = sanitizeAiBaseUrl(aiBaseUrlDraft || "");
                     if (cleaned) {
                       await AsyncStorage.setItem(AI_BASE_URL_KEY, cleaned);
                       setAiBaseUrl(cleaned);
@@ -1890,7 +2075,7 @@ export default function CoachScreen() {
                     // Use auto
                     await AsyncStorage.removeItem(AI_BASE_URL_KEY);
                     setAiBaseUrl("");
-                    setAiBaseUrlDraft(aiHint.replace("Sugerido (LAN): ", ""));
+                    setAiBaseUrlDraft(extractUrlFromHint(aiHint));
                     setServerModalOpen(false);
                   }}
                   style={styles.serverActionBtnGhost}
@@ -1918,11 +2103,13 @@ export default function CoachScreen() {
         ) : null}
 
         <ScrollView
-          ref={(r) => (scrollRef.current = r)}
+          ref={(r) => {
+            scrollRef.current = r;
+          }}
           style={styles.scroll}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: 18 + inputBarHeight + inputBarExtraBottom },
+            { paddingBottom: 18 + inputBarHeight + composerBottomOffset + inputBarExtraBottom },
           ]}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={(_, h) => {
@@ -2250,16 +2437,26 @@ export default function CoachScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={[styles.inputBar, { paddingBottom: 12 + inputBarExtraBottom }]}>
+        <View style={[styles.inputBar, { paddingBottom: 12 + inputBarExtraBottom, marginBottom: composerBottomOffset }]}>
           <Pressable
             style={[styles.micBtn, { opacity: loading ? 0.6 : 0.55 }]}
             onPress={toggleRecording}
-            disabled={loading || sttStatus === "transcribing" || !Audio}
+            disabled={loading || sttStatus === "transcribing"}
           >
             <Text style={styles.micText}>
               {sttStatus === "recording" ? "⏹️" : !Audio ? "🚫" : "🎙️"}
             </Text>
           </Pressable>
+
+          {sttStatus === "recording" ? (
+            <Pressable
+              style={[styles.stopBtn, loading && { opacity: 0.6 }]}
+              onPress={stopRecording}
+              disabled={loading}
+            >
+              <Text style={styles.stopBtnText}>Parar</Text>
+            </Pressable>
+          ) : null}
 
           <Pressable
             style={[styles.speakBtn, !speakEnabled && { opacity: 0.55 }]}
@@ -2317,6 +2514,14 @@ export default function CoachScreen() {
             <Text style={styles.sendText}>Enviar</Text>
           </Pressable>
         </View>
+
+        {!Audio ? (
+          <View style={styles.sttHintWrap}>
+            <Text style={styles.sttHintText}>
+              Este build no soporta audio. Recompila/reinstala el dev build con `expo-av`.
+            </Text>
+          </View>
+        ) : null}
 
         <Modal
           visible={voiceModalOpen}
@@ -2403,8 +2608,9 @@ export default function CoachScreen() {
                         key={String(id || label)}
                         onPress={async () => {
                           if (!id) return;
+                          ttsVoiceIdRef.current = id;
                           setTtsVoiceId(id);
-                          await AsyncStorage.setItem(TTS_VOICE_KEY, id);
+                          await AsyncStorage.setItem(COACH_VOICE_KEY, id);
                           speakNow("Esta es la voz del coach.", id);
                         }}
                         style={[styles.voiceRow, selected && styles.voiceRowSelected]}
@@ -2426,11 +2632,127 @@ export default function CoachScreen() {
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: "#0B0F14" },
+  wrap: { flex: 1 },
+
+  header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8 },
+  title: { fontSize: 28, fontWeight: "800", color: "#FFFFFF" },
+  sub: { marginTop: 6, color: "#9CA3AF" },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  baseLine: { marginTop: 6, color: "#94A3B8", fontSize: 12 },
+  loadingLine: { marginTop: 6, color: "#F59E0B", fontWeight: "800" },
+  planSavedToast: { marginTop: 6, color: "#22C55E", fontWeight: "900" },
+  thinkingHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
+
+  serverBtn: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  serverBtnText: { fontWeight: "900", color: "#E7C66B" },
+  resetBtn: {
+    borderColor: "#334155",
+    backgroundColor: "#111827",
+  },
+  resetBtnText: { fontWeight: "900", color: "#E5E7EB" },
+
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 14, paddingBottom: 18 },
+
+  checklistCard: {
+    borderWidth: 1,
+    borderColor: "#1F2937",
+    backgroundColor: "#121826",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+  checklistHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  checklistTitle: { color: "#FFFFFF", fontWeight: "900", fontSize: 16 },
+  checklistToggle: {
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checklistToggleText: { color: "#E5E7EB", fontWeight: "800", fontSize: 12 },
+  checklistReset: {
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#3F3F46",
+    backgroundColor: "#111827",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checklistResetText: { color: "#D1D5DB", fontWeight: "800", fontSize: 12 },
+  checklistSub: { marginTop: 8, color: "#94A3B8", fontSize: 12 },
+  progressTrack: {
+    marginTop: 8,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "#1F2937",
+    overflow: "hidden",
+  },
+  progressFill: { height: "100%", backgroundColor: "#22C55E" },
+  planFromChecklistBtn: {
+    borderWidth: 1,
+    borderColor: "#4B5563",
+    backgroundColor: "#1F2937",
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  planFromChecklistText: { color: "#F8FAFC", fontWeight: "900" },
+  jumpToChatBtn: {
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  jumpToChatText: { color: "#CBD5E1", fontWeight: "900" },
+  taskRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "#273449",
+  },
+  taskRowDone: {
+    backgroundColor: "rgba(34,197,94,0.18)",
+    borderColor: "rgba(34,197,94,0.45)",
+  },
+  taskCheck: { width: 22, fontWeight: "900", color: "#E5E7EB" },
+  taskCheckDone: { color: "#22C55E" },
+  taskLabel: { flex: 1, color: "#E5E7EB", fontWeight: "700" },
+  taskLabelDone: { color: "#86EFAC", textDecorationLine: "line-through" },
+
   // --- Plan de hoy (card fija) ---
   planTodayCard: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#1F2937",
+    backgroundColor: "#121826",
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
@@ -2440,33 +2762,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  planTodayTitle: { fontWeight: "900", fontSize: 16, color: "#111" },
+  planTodayTitle: { fontWeight: "900", fontSize: 16, color: "#FFFFFF" },
   planTodayBtn: {
     height: 32,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#FFE1CC",
-    backgroundColor: "#FFF3EA",
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
     justifyContent: "center",
     alignItems: "center",
   },
-  planTodayBtnText: { fontWeight: "900", color: "#B54708" },
+  planTodayBtnText: { fontWeight: "900", color: "#E7C66B" },
   planTodayBtnGhost: {
     height: 32,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
     justifyContent: "center",
     alignItems: "center",
   },
-  planTodayBtnGhostText: { fontWeight: "900", color: "#111" },
-  planTodayEmpty: { marginTop: 2, color: "#111", fontWeight: "800" },
-  planTodayEmpty2: { marginTop: 6, color: "#666" },
-  planTodayMeta: { color: "#888", fontSize: 12 },
-  planTodayHeading: { marginTop: 6, fontSize: 15, fontWeight: "900", color: "#111" },
+  planTodayBtnGhostText: { fontWeight: "900", color: "#E5E7EB" },
+  planTodayEmpty: { marginTop: 2, color: "#E5E7EB", fontWeight: "800" },
+  planTodayEmpty2: { marginTop: 6, color: "#94A3B8" },
+  planTodayMeta: { color: "#94A3B8", fontSize: 12 },
+  planTodayHeading: { marginTop: 6, fontSize: 15, fontWeight: "900", color: "#FFFFFF" },
   planTodayRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2474,109 +2796,67 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0F172A",
     borderWidth: 1,
-    borderColor: "#EEF2F7",
+    borderColor: "#273449",
   },
   planTodayRowDone: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#BBF7D0",
+    backgroundColor: "rgba(34,197,94,0.18)",
+    borderColor: "rgba(34,197,94,0.45)",
   },
-  planTodayCheck: { width: 22, fontWeight: "900", color: "#111" },
-  planTodayCheckDone: { color: "#16A34A" },
-  planTodayRowText: { flex: 1, color: "#111", fontWeight: "700" },
-  planTodayRowTextDone: { color: "#166534", textDecorationLine: "line-through" },
-  planTodayMeal: { color: "#111", fontWeight: "700" },
-  planTodayNotes: { marginTop: 10, color: "#374151" },
+  planTodayCheck: { width: 22, fontWeight: "900", color: "#E5E7EB" },
+  planTodayCheckDone: { color: "#22C55E" },
+  planTodayRowText: { flex: 1, color: "#E5E7EB", fontWeight: "700" },
+  planTodayRowTextDone: { color: "#86EFAC", textDecorationLine: "line-through" },
+  planTodayMeal: { color: "#E5E7EB", fontWeight: "700" },
+  planTodayNotes: { marginTop: 10, color: "#CBD5E1" },
   planTodayPill: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     fontWeight: "900",
-    color: "#111",
+    color: "#E5E7EB",
   },
   planTodayJump: {
     borderWidth: 1,
-    borderColor: "#FFE1CC",
-    backgroundColor: "#FFF3EA",
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
   },
-  planTodayJumpText: { fontWeight: "900", color: "#B54708" },
+  planTodayJumpText: { fontWeight: "900", color: "#E5E7EB" },
   planTodayRefine: {
     borderWidth: 1,
-    borderColor: "#111",
-    backgroundColor: "#111",
+    borderColor: "#E7C66B",
+    backgroundColor: "#E7C66B",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
   },
-  planTodayRefineText: { fontWeight: "900", color: "#fff" },
-  safe: { flex: 1, backgroundColor: "#fff" },
-  wrap: { flex: 1 },
-  header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8 },
-  title: { fontSize: 28, fontWeight: "800" },
-  sub: { marginTop: 6, color: "#666" },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  serverBtn: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#FFE1CC",
-    backgroundColor: "#FFF3EA",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  serverBtnText: { fontWeight: "900", color: "#B54708" },
-  resetBtn: {
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-  },
-  resetBtnText: { fontWeight: "900", color: "#111" },
-  baseLine: { marginTop: 6, color: "#888", fontSize: 12 },
-  loadingLine: { marginTop: 6, color: "#ff7a00", fontWeight: "800" },
-  planSavedToast: { marginTop: 6, color: "#16A34A", fontWeight: "900" },
-  thinkingHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
-
-  voiceErr: {
-    marginHorizontal: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-  voiceErrText: { color: "#991B1B", fontWeight: "700" },
-
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 14, paddingBottom: 18 },
+  planTodayRefineText: { fontWeight: "900", color: "#111827" },
 
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   quickBtn: {
     borderWidth: 1,
-    borderColor: "#FFE1CC",
+    borderColor: "#334155",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#FFF3EA",
+    backgroundColor: "#1F2937",
   },
-  quickText: { fontWeight: "800", color: "#B54708" },
+  quickText: { fontWeight: "800", color: "#F8FAFC" },
 
   bubble: { maxWidth: "92%", padding: 12, borderRadius: 14, marginVertical: 6 },
-  userBubble: { backgroundColor: "#111", alignSelf: "flex-end" },
-  coachBubble: { backgroundColor: "#F5F5F5", alignSelf: "flex-start" },
+  userBubble: { backgroundColor: "#334155", alignSelf: "flex-end" },
+  coachBubble: { backgroundColor: "#121826", borderWidth: 1, borderColor: "#1F2937", alignSelf: "flex-start" },
   bubbleText: { fontSize: 15, lineHeight: 20 },
-  userText: { color: "#fff" },
-  coachText: { color: "#111" },
-  thinkingBubble: { opacity: 0.7 },
+  userText: { color: "#FFFFFF" },
+  coachText: { color: "#E5E7EB" },
+  thinkingBubble: { opacity: 0.9 },
   thinkingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2586,14 +2866,50 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  planCardInline: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#273449",
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: "#0F172A",
+  },
+  planTitleInline: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
+  planActionRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  planActionNum: { color: "#E7C66B", fontWeight: "900", width: 18 },
+  planActionText: { flex: 1, color: "#E5E7EB" },
+  planMealLine: { color: "#CBD5E1", fontWeight: "700" },
+  planPillInline: {
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    color: "#E5E7EB",
+    fontWeight: "900",
+  },
+  planNotesInline: { marginTop: 10, color: "#94A3B8" },
+
+  voiceErr: {
+    marginHorizontal: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+    backgroundColor: "rgba(220,38,38,0.2)",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  voiceErrText: { color: "#FCA5A5", fontWeight: "700" },
+
   inputBar: {
     flexDirection: "row",
     paddingHorizontal: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopColor: "#1F2937",
     gap: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#0F141C",
     alignItems: "flex-end",
   },
   micBtn: {
@@ -2603,10 +2919,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#FFE1CC",
-    backgroundColor: "#FFF3EA",
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
   },
-  micText: { fontSize: 18, fontWeight: "900", color: "#111" },
+  micText: { fontSize: 18, fontWeight: "900", color: "#F8FAFC" },
+  stopBtn: {
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    backgroundColor: "rgba(245,158,11,0.2)",
+  },
+  stopBtnText: { color: "#FBBF24", fontWeight: "900" },
 
   speakBtn: {
     width: 44,
@@ -2615,8 +2942,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "#fff",
+    borderColor: "#334155",
+    backgroundColor: "#111827",
   },
   speakText: { fontSize: 18, fontWeight: "900" },
 
@@ -2627,14 +2954,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#FFE1CC",
-    backgroundColor: "#FFF3EA",
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
   },
-  voiceBtnText: { fontWeight: "900", color: "#B54708" },
+  voiceBtnText: { fontWeight: "900", color: "#E7C66B" },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#FFFFFF",
+    backgroundColor: "#121826",
+  },
+  sendBtn: {
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#E7C66B",
+    backgroundColor: "#E7C66B",
+  },
+  sendText: { color: "#111827", fontWeight: "900" },
+  sttHintWrap: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    marginTop: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#7C2D12",
+    backgroundColor: "rgba(180,83,9,0.2)",
+  },
+  sttHintText: { color: "#FCD34D", fontSize: 12, fontWeight: "700" },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.62)",
     justifyContent: "flex-end",
   },
   modalSheet: {
@@ -2653,4 +3015,67 @@ const styles = StyleSheet.create({
   modalTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   modalClose: { paddingVertical: 6, paddingHorizontal: 8 },
   modalCloseText: { color: "#fff", fontWeight: "800" },
-  });
+  modalHint: { color: "#E5E7EB", marginBottom: 6 },
+  modalHint2: { color: "#94A3B8", marginTop: 8, fontSize: 12 },
+  serverInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0F172A",
+    color: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  serverActions: { marginTop: 12, flexDirection: "row", gap: 10 },
+  serverActionBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E7C66B",
+    backgroundColor: "#E7C66B",
+  },
+  serverActionText: { fontWeight: "900", color: "#111827" },
+  serverActionBtnGhost: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#111827",
+  },
+  serverActionTextGhost: { fontWeight: "900", color: "#E5E7EB" },
+
+  controlsRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  controlBtn: {
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#1F2937",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  controlBtnText: { color: "#E5E7EB", fontWeight: "800" },
+  voiceList: { marginTop: 10, maxHeight: 260 },
+  emptyVoices: { color: "#94A3B8", lineHeight: 20 },
+  voiceRow: {
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    backgroundColor: "#111827",
+  },
+  voiceRowSelected: {
+    borderColor: "#E7C66B",
+    backgroundColor: "rgba(231,198,107,0.16)",
+  },
+  voiceLabel: { color: "#E5E7EB" },
+  voiceLabelSelected: { color: "#FFFFFF", fontWeight: "800" },
+});

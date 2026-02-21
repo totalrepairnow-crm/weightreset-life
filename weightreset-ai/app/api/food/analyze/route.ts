@@ -132,16 +132,16 @@ Rules: confidence 0..1. Use null when unknown. If it's a label, prefer label num
           role: 'user',
           content: [
             { type: 'input_text', text: fullPrompt },
-            { type: 'input_image', image_url: imageUrl },
+            { type: 'input_image', image_url: imageUrl, detail: 'auto' },
           ],
         },
       ],
     });
 
-    // The JS SDK exposes `output_text` for convenience; keep a fallback extraction.
+    // Keep compatibility across SDK response shape variants.
+    const outputText = (resp as any)?.output_text;
     const text =
-      // @ts-expect-error: output_text is present in the OpenAI Responses API SDK
-      (resp.output_text as string | undefined) ||
+      (typeof outputText === 'string' ? outputText : '') ||
       (Array.isArray((resp as any).output)
         ? (resp as any).output
             .flatMap((o: any) => o.content || [])
