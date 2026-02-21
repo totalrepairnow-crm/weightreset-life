@@ -66,9 +66,6 @@ export default function BarcodeScanScreen() {
       <CameraView
         style={{ flex: 1 }}
         facing="back"
-        // Some expo-camera versions expect `torch` as 'on'|'off', others support `enableTorch` boolean.
-        // We pass both for maximum compatibility.
-        torch={(torchEnabled ? 'on' : 'off') as any}
         enableTorch={torchEnabled as any}
         barcodeScannerSettings={{
           barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
@@ -92,7 +89,7 @@ export default function BarcodeScanScreen() {
           Escanea un UPC / Barcode
         </Text>
         <Text style={{ color: 'white', opacity: 0.9, marginTop: 6 }}>
-          Apunta al código. Se guardará automáticamente. Si ya escaneó, toca "Escanear otro".
+          Apunta al código. Se guardará automáticamente. Si ya escaneó, toca &quot;Escanear otro&quot;.
         </Text>
       </View>
 

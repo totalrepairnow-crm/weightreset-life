@@ -1,14 +1,14 @@
 import React from "react";
-import { Text, TextStyle } from "react-native";
+import { StyleProp, Text, TextProps as RNTextProps, TextStyle } from "react-native";
 import { useWRTheme } from "../theme/theme";
 
-type Props = {
+type Props = RNTextProps & {
   children: React.ReactNode;
   variant?: "h1" | "h2" | "body" | "muted";
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
 };
 
-export default function WRText({ children, variant = "body", style }: Props) {
+export default function WRText({ children, variant = "body", style, ...rest }: Props) {
   const { theme } = useWRTheme();
 
   const base: TextStyle = { color: theme.colors.text };
@@ -19,5 +19,9 @@ export default function WRText({ children, variant = "body", style }: Props) {
     muted: { fontSize: 13, fontWeight: "600", color: theme.colors.muted },
   };
 
-  return <Text style={[base, variants[variant], style]}>{children}</Text>;
+  return (
+    <Text {...rest} style={[base, variants[variant], style]}>
+      {children}
+    </Text>
+  );
 }

@@ -1,20 +1,16 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, TouchableOpacity, View } from 'react-native';
 
 import { router } from 'expo-router';
 
 import { isoDateKey } from '../../constants/date';
 import { getAchievementFeed } from '../../lib/achievements';
+import { useWRTheme } from '../../theme/theme';
+import Card from '../../ui/Card';
+import Screen from '../../ui/Screen';
+import WRText from '../../ui/Text';
 
-const COLORS = {
-  bg: '#FFFFFF',
-  text: '#111827',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  orange: '#FF6A00',
-  orangeSoft: '#FFE6D5',
-};
 
 const STORAGE_KEY_CHECKED_PREFIX = 'wr_checked_v1_';
 const STORAGE_KEY_CHECKIN_PREFIX = 'wr_checkin_v1_';
@@ -309,75 +305,6 @@ type Insight = {
   recTarget?: RecTarget;
 };
 
-function InsightCard({
-  insight,
-  onMarkAction,
-}: {
-  insight: Insight;
-  onMarkAction?: () => void;
-}) {
-  const bg =
-    insight.tone === 'bad'
-      ? '#FEF2F2'
-      : insight.tone === 'warn'
-        ? '#FFFBEB'
-        : insight.tone === 'good'
-          ? '#ECFDF5'
-          : '#fff';
-
-  const border =
-    insight.tone === 'bad'
-      ? '#FCA5A5'
-      : insight.tone === 'warn'
-        ? '#FCD34D'
-        : insight.tone === 'good'
-          ? '#6EE7B7'
-          : COLORS.border;
-
-  return (
-    <View
-      style={{
-        borderWidth: 1,
-        borderColor: border,
-        borderRadius: 16,
-        padding: 12,
-        backgroundColor: bg,
-        marginTop: 10,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ fontSize: 18 }}>{insight.icon}</Text>
-        <Text style={{ flex: 1, color: COLORS.text, fontWeight: '900' }}>{insight.title}</Text>
-      </View>
-
-      <Text style={{ marginTop: 8, color: insight.ready ? COLORS.text : COLORS.muted, fontWeight: '700' }}>
-        {insight.text}
-      </Text>
-
-      {!insight.ready ? (
-        <Text style={{ marginTop: 6, color: COLORS.muted, fontSize: 12 }}>
-          Tip: registra más días variados para activar este insight.
-        </Text>
-      ) : null}
-
-      {insight.key === 'recommendation' && insight.ready && onMarkAction ? (
-        <Pressable
-          onPress={onMarkAction}
-          style={{
-            marginTop: 10,
-            paddingVertical: 12,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            backgroundColor: '#fff',
-          }}
-        >
-          <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Marcar 1 acción hoy</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
 
 export default function ProgresoScreen() {
   const [days, setDays] = useState<DayRow[]>([]);
@@ -389,6 +316,108 @@ export default function ProgresoScreen() {
   const [achUnlocked, setAchUnlocked] = useState<any[]>([]);
   const [achLocked, setAchLocked] = useState<any[]>([]);
   const [activeWeek, setActiveWeek] = useState<ActiveWeek | null>(null);
+
+  const { theme } = useWRTheme();
+
+  const spacing = theme?.spacing ?? { xs: 6, sm: 10, md: 14, lg: 18, xl: 24 };
+
+  const c = theme?.colors ?? {
+    bg: '#0B0F14',
+    surface: '#0F141C',
+    card: '#121826',
+    text: '#FFFFFF',
+    muted: '#9CA3AF',
+    border: '#1F2937',
+    primary: '#E7C66B',
+    accent2: '#22C55E',
+    success: '#22C55E',
+    warning: '#F59E0B',
+    danger: '#EF4444',
+  };
+
+  const COLORS = {
+    bg: c.bg,
+    surface: c.surface,
+    card: c.card,
+    text: c.text,
+    muted: c.muted,
+    border: c.border,
+    orange: c.primary,
+    orangeSoft: c.surface,
+    success: c.success ?? c.accent2,
+    warning: c.warning,
+    danger: c.danger,
+  };
+
+  function InsightCard({
+    insight,
+    onMarkAction,
+  }: {
+    insight: Insight;
+    onMarkAction?: () => void;
+  }) {
+    const bg =
+      insight.tone === 'bad'
+        ? 'rgba(239, 68, 68, 0.12)'
+        : insight.tone === 'warn'
+          ? 'rgba(245, 158, 11, 0.12)'
+          : insight.tone === 'good'
+            ? 'rgba(34, 197, 94, 0.12)'
+            : COLORS.card;
+
+    const border =
+      insight.tone === 'bad'
+        ? 'rgba(239, 68, 68, 0.35)'
+        : insight.tone === 'warn'
+          ? 'rgba(245, 158, 11, 0.35)'
+          : insight.tone === 'good'
+            ? 'rgba(34, 197, 94, 0.35)'
+            : COLORS.border;
+
+    return (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: border,
+          borderRadius: 16,
+          padding: 12,
+          backgroundColor: bg,
+          marginTop: 10,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <WRText style={{ fontSize: 18 }}>{insight.icon}</WRText>
+          <WRText style={{ flex: 1, color: COLORS.text, fontWeight: '900' }}>{insight.title}</WRText>
+        </View>
+
+        <WRText style={{ marginTop: 8, color: insight.ready ? COLORS.text : COLORS.muted, fontWeight: '700' }}>
+          {insight.text}
+        </WRText>
+
+        {!insight.ready ? (
+          <WRText style={{ marginTop: 6, color: COLORS.muted, fontSize: 12 }}>
+            Tip: registra más días variados para activar este insight.
+          </WRText>
+        ) : null}
+
+        {insight.key === 'recommendation' && insight.ready && onMarkAction ? (
+          <Pressable
+            onPress={onMarkAction}
+            style={{
+              marginTop: 10,
+              paddingVertical: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              backgroundColor: COLORS.card,
+            }}
+          >
+            <WRText style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Marcar 1 acción hoy</WRText>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
 
   const hasData = days.length > 0;
 
@@ -773,11 +802,11 @@ export default function ProgresoScreen() {
   );
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, gap: 14 }}>
+    <Screen scroll contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
-          <Text style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Progreso</Text>
-          <Text style={{ marginTop: 4, color: COLORS.muted }}>Insights basados en tus check-ins.</Text>
+          <WRText style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Progreso</WRText>
+          <WRText style={{ marginTop: 4, color: COLORS.muted }}>Insights basados en tus check-ins.</WRText>
         </View>
 
         <Pressable
@@ -788,22 +817,22 @@ export default function ProgresoScreen() {
             borderRadius: 12,
             borderWidth: 1,
             borderColor: COLORS.border,
-            backgroundColor: '#fff',
+            backgroundColor: COLORS.card,
             opacity: refreshing ? 0.6 : 1,
           }}
         >
-          <Text style={{ fontWeight: '900', color: COLORS.text }}>{refreshing ? '...' : 'Actualizar'}</Text>
+          <WRText style={{ fontWeight: '900', color: COLORS.text }}>{refreshing ? '...' : 'Actualizar'}</WRText>
         </Pressable>
       </View>
 
       {/* Insights */}
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: COLORS.orangeSoft }}>
-        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Tus Insights</Text>
+      <Card>
+        <WRText style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Tus Insights</WRText>
 
         {!hasData ? (
-          <Text style={{ marginTop: 10, color: COLORS.text, fontWeight: '700' }}>
+          <WRText style={{ marginTop: 10, color: COLORS.text, fontWeight: '700' }}>
             Aún no hay suficientes datos. Haz tu check-in 3–4 días y vuelve aquí.
-          </Text>
+          </WRText>
         ) : (
           <>
             {insights.map((ins) => (
@@ -819,15 +848,15 @@ export default function ProgresoScreen() {
             ))}
           </>
         )}
-      </View>
+      </Card>
 
       {/* Últimos 7 días */}
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Últimos 7 días</Text>
-        <Text style={{ marginTop: 4, color: COLORS.muted }}>Puntaje + resumen rápido.</Text>
+      <Card>
+        <WRText style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Últimos 7 días</WRText>
+        <WRText style={{ marginTop: 4, color: COLORS.muted }}>Puntaje + resumen rápido.</WRText>
 
         {!hasData ? (
-          <Text style={{ marginTop: 10, color: COLORS.muted }}>Sin datos aún.</Text>
+          <WRText style={{ marginTop: 10, color: COLORS.muted }}>Sin datos aún.</WRText>
         ) : (
           <View style={{ marginTop: 10, gap: 10 }}>
             {last7.map((d) => {
@@ -841,49 +870,49 @@ export default function ProgresoScreen() {
                     borderColor: COLORS.border,
                     borderRadius: 14,
                     padding: 12,
-                    backgroundColor: '#fff',
+                    backgroundColor: COLORS.card,
                   }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontWeight: '900', color: COLORS.text }}>{fmtDate(d.dateKey)}</Text>
-                    <Text style={{ fontWeight: '900', color: COLORS.orange }}>{d.score}</Text>
+                    <WRText style={{ fontWeight: '900', color: COLORS.text }}>{fmtDate(d.dateKey)}</WRText>
+                    <WRText style={{ fontWeight: '900', color: COLORS.orange }}>{d.score}</WRText>
                   </View>
 
-                  <Text style={{ marginTop: 6, color: COLORS.muted }}>
+                  <WRText style={{ marginTop: 6, color: COLORS.muted }}>
                     Sueño {d.checkin.sueno_horas}h · Estrés {d.checkin.estres}/5 · Antojos {d.checkin.antojos}/3 · Movimiento{' '}
                     {d.checkin.movimiento_min} min · Acciones {done}/3
                     {d.nutrition ? `\n🍽️ ${d.mealsCount ?? 0} comidas · ${fmtKcal(d.nutrition.calories)} · ${fmtMacros(d.nutrition)}` : ''}
-                  </Text>
+                  </WRText>
                 </Pressable>
               );
             })}
           </View>
         )}
-      </View>
+      </Card>
 
       {/* Calendario */}
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
+      <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Calendario</Text>
+          <WRText style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Calendario</WRText>
 
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Pressable onPress={prevMonth}>
-              <Text style={{ fontWeight: '900', fontSize: 18 }}>‹</Text>
+              <WRText style={{ fontWeight: '900', fontSize: 18 }}>‹</WRText>
             </Pressable>
 
-            <Text style={{ color: COLORS.muted, fontWeight: '700' }}>
+            <WRText style={{ color: COLORS.muted, fontWeight: '700' }}>
               {new Date(year, month).toLocaleString('es-MX', { month: 'long', year: 'numeric' })}
-            </Text>
+            </WRText>
 
             <Pressable onPress={nextMonth}>
-              <Text style={{ fontWeight: '900', fontSize: 18 }}>›</Text>
+              <WRText style={{ fontWeight: '900', fontSize: 18 }}>›</WRText>
             </Pressable>
           </View>
         </View>
 
         <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap' }}>
           {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => (
-            <Text
+            <WRText
               key={d}
               style={{
                 width: '14.285%',
@@ -894,7 +923,7 @@ export default function ProgresoScreen() {
               }}
             >
               {d}
-            </Text>
+            </WRText>
           ))}
 
           {cells.map((d, idx) => {
@@ -903,7 +932,7 @@ export default function ProgresoScreen() {
             const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const row = byDate.get(key);
             const score = row?.score;
-            const bg = score != null ? scoreColor(score) : '#E5E7EB';
+            const bg = score != null ? scoreColor(score) : COLORS.border;
 
             return (
               <TouchableOpacity
@@ -931,7 +960,7 @@ export default function ProgresoScreen() {
                         borderColor: isToday ? COLORS.orange : 'transparent',
                       }}
                     >
-                      <Text style={{ fontWeight: '900', color: textColor }}>{d}</Text>
+                      <WRText style={{ fontWeight: '900', color: textColor }}>{d}</WRText>
                     </View>
                   );
                 })()}
@@ -940,10 +969,10 @@ export default function ProgresoScreen() {
           })}
         </View>
 
-        <Text style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
+        <WRText style={{ marginTop: 10, color: COLORS.muted, fontSize: 12 }}>
           Tip: si un día está gris, todavía no hay check-in guardado.
-        </Text>
-      </View>
+        </WRText>
+      </Card>
 
       <Modal
         visible={detailOpen}
@@ -963,43 +992,43 @@ export default function ProgresoScreen() {
           <Pressable
             onPress={() => {}}
             style={{
-              backgroundColor: '#fff',
+              backgroundColor: COLORS.card,
               borderRadius: 18,
               borderWidth: 1,
               borderColor: COLORS.border,
               padding: 16,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>
+            <WRText style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>
               {selectedDateKey ? `Detalle ${selectedDateKey}` : 'Detalle'}
-            </Text>
+            </WRText>
 
             {selectedRow ? (
               <>
-                <Text style={{ marginTop: 10, color: COLORS.muted }}>
-                  Puntaje: <Text style={{ fontWeight: '900', color: COLORS.orange }}>{selectedRow.score}</Text>
-                </Text>
+                <WRText style={{ marginTop: 10, color: COLORS.muted }}>
+                  Puntaje: <WRText style={{ fontWeight: '900', color: COLORS.orange }}>{selectedRow.score}</WRText>
+                </WRText>
                 {selectedRow.nutrition ? (
-                  <Text style={{ marginTop: 8, color: COLORS.muted }}>
-                    🍽️ Comidas: <Text style={{ fontWeight: '900', color: COLORS.text }}>{selectedRow.mealsCount ?? 0}</Text> ·{' '}
-                    <Text style={{ fontWeight: '900', color: COLORS.text }}>{fmtKcal(selectedRow.nutrition.calories)}</Text> ·{' '}
-                    <Text style={{ fontWeight: '900', color: COLORS.text }}>{fmtMacros(selectedRow.nutrition)}</Text>
-                  </Text>
+                  <WRText style={{ marginTop: 8, color: COLORS.muted }}>
+                    🍽️ Comidas: <WRText style={{ fontWeight: '900', color: COLORS.text }}>{selectedRow.mealsCount ?? 0}</WRText> ·{' '}
+                    <WRText style={{ fontWeight: '900', color: COLORS.text }}>{fmtKcal(selectedRow.nutrition.calories)}</WRText> ·{' '}
+                    <WRText style={{ fontWeight: '900', color: COLORS.text }}>{fmtMacros(selectedRow.nutrition)}</WRText>
+                  </WRText>
                 ) : null}
-                <Text style={{ marginTop: 8, color: COLORS.text, fontWeight: '700' }}>
+                <WRText style={{ marginTop: 8, color: COLORS.text, fontWeight: '700' }}>
                   😴 Sueño: {selectedRow.checkin.sueno_horas}h
-                </Text>
-                <Text style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
+                </WRText>
+                <WRText style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
                   😮‍💨 Estrés: {selectedRow.checkin.estres}/5
-                </Text>
-                <Text style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
+                </WRText>
+                <WRText style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
                   🍫 Antojos: {selectedRow.checkin.antojos}/3
-                </Text>
-                <Text style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
+                </WRText>
+                <WRText style={{ marginTop: 6, color: COLORS.text, fontWeight: '700' }}>
                   🏃 Movimiento: {selectedRow.checkin.movimiento_min} min
-                </Text>
+                </WRText>
                 <View style={{ marginTop: 10 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: '900' }}>✅ Acciones</Text>
+                  <WRText style={{ color: COLORS.text, fontWeight: '900' }}>✅ Acciones</WRText>
 
                   {(
                     activeWeek?.dailyActions?.length ? activeWeek.dailyActions : ['Acción 1', 'Acción 2', 'Acción 3']
@@ -1018,27 +1047,27 @@ export default function ProgresoScreen() {
                             borderRadius: 6,
                             borderWidth: 1,
                             borderColor: done ? COLORS.orange : COLORS.border,
-                            backgroundColor: done ? COLORS.orangeSoft : '#fff',
+                            backgroundColor: done ? COLORS.orangeSoft : COLORS.card,
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                         >
-                          <Text style={{ fontWeight: '900', color: COLORS.text }}>{done ? '✓' : ''}</Text>
+                          <WRText style={{ fontWeight: '900', color: COLORS.text }}>{done ? '✓' : ''}</WRText>
                         </View>
-                        <Text style={{ flex: 1, color: done ? COLORS.text : COLORS.muted, fontWeight: '700' }}>{label}</Text>
+                        <WRText style={{ flex: 1, color: done ? COLORS.text : COLORS.muted, fontWeight: '700' }}>{label}</WRText>
                       </Pressable>
                     );
                   })}
 
-                  <Text style={{ marginTop: 8, color: COLORS.muted }}>
+                  <WRText style={{ marginTop: 8, color: COLORS.muted }}>
                     {selectedRow.checked.filter(Boolean).length}/3 completadas
-                  </Text>
+                  </WRText>
                 </View>
               </>
             ) : (
-              <Text style={{ marginTop: 10, color: COLORS.muted }}>
+              <WRText style={{ marginTop: 10, color: COLORS.muted }}>
                 No hay check-in guardado este día.
-              </Text>
+              </WRText>
             )}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
@@ -1050,12 +1079,12 @@ export default function ProgresoScreen() {
                   borderRadius: 14,
                   borderWidth: 1,
                   borderColor: COLORS.border,
-                  backgroundColor: '#fff',
+                  backgroundColor: COLORS.card,
                 }}
               >
-                <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>
+                <WRText style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>
                   Cerrar
-                </Text>
+                </WRText>
               </Pressable>
 
               <Pressable
@@ -1069,9 +1098,9 @@ export default function ProgresoScreen() {
                   backgroundColor: COLORS.orange,
                 }}
               >
-                <Text style={{ textAlign: 'center', fontWeight: '900', color: 'white' }}>
+                <WRText style={{ textAlign: 'center', fontWeight: '900', color: 'white' }}>
                   {selectedRow ? 'Editar' : 'Crear'}
-                </Text>
+                </WRText>
               </Pressable>
             </View>
           </Pressable>
@@ -1079,9 +1108,9 @@ export default function ProgresoScreen() {
       </Modal>
 
       {/* Logros (preview) */}
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>🏅 Logros</Text>
-        <Text style={{ marginTop: 4, color: COLORS.muted }}>Tu progreso hacia los próximos logros.</Text>
+      <Card>
+        <WRText style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>🏅 Logros</WRText>
+        <WRText style={{ marginTop: 4, color: COLORS.muted }}>Tu progreso hacia los próximos logros.</WRText>
 
         {achUnlocked.length ? (
           <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -1098,18 +1127,18 @@ export default function ProgresoScreen() {
                   borderColor: COLORS.border,
                 }}
               >
-                <Text style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</Text>
+                <WRText style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</WRText>
               </Pressable>
             ))}
           </View>
         ) : (
-          <Text style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay logros desbloqueados.</Text>
+          <WRText style={{ marginTop: 10, color: COLORS.muted }}>Aún no hay logros desbloqueados.</WRText>
         )}
 
         {achLocked.length ? (
           <View style={{ marginTop: 14 }}>
-            <Text style={{ fontWeight: '900', color: COLORS.text }}>Próximos</Text>
-            <Text style={{ marginTop: 4, color: COLORS.muted }}>Lo que te falta para desbloquearlos.</Text>
+            <WRText style={{ fontWeight: '900', color: COLORS.text }}>Próximos</WRText>
+            <WRText style={{ marginTop: 4, color: COLORS.muted }}>Lo que te falta para desbloquearlos.</WRText>
 
             <View style={{ marginTop: 10, gap: 10 }}>
               {achLocked.slice(0, 3).map((a: any) => (
@@ -1121,11 +1150,11 @@ export default function ProgresoScreen() {
                     borderColor: COLORS.border,
                     borderRadius: 14,
                     padding: 12,
-                    backgroundColor: '#F9FAFB',
+                    backgroundColor: COLORS.card,
                   }}
                 >
-                  <Text style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</Text>
-                  <Text style={{ marginTop: 6, color: COLORS.muted, fontWeight: '700' }}>{a.progressText}</Text>
+                  <WRText style={{ fontWeight: '900', color: COLORS.text }}>{a.title}</WRText>
+                  <WRText style={{ marginTop: 6, color: COLORS.muted, fontWeight: '700' }}>{a.progressText}</WRText>
                 </Pressable>
               ))}
             </View>
@@ -1138,19 +1167,19 @@ export default function ProgresoScreen() {
                 borderRadius: 14,
                 borderWidth: 1,
                 borderColor: COLORS.border,
-                backgroundColor: '#fff',
+                backgroundColor: COLORS.card,
               }}
             >
-              <Text style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Ver todos en Perfil</Text>
+              <WRText style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Ver todos en Perfil</WRText>
             </Pressable>
           </View>
         ) : null}
-      </View>
+      </Card>
 
-      <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, padding: 16, backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Siguiente</Text>
-        <Text style={{ marginTop: 8, color: COLORS.muted }}>• Logros (badges) por rachas y hábitos</Text>
-      </View>
-    </ScrollView>
+      <Card>
+        <WRText style={{ fontSize: 16, fontWeight: '900', color: COLORS.text }}>Siguiente</WRText>
+        <WRText style={{ marginTop: 8, color: COLORS.muted }}>• Logros (badges) por rachas y hábitos</WRText>
+      </Card>
+    </Screen>
   );
 }
