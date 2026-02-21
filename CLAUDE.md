@@ -126,6 +126,11 @@
 - `npm run build`
 - `npx tsc --noEmit` (typecheck manual)
 
+### Arranque diario
+
+- **Terminal 1 (backend):** `cd weightreset-ai && npm run dev -- --hostname 0.0.0.0 --port 3000`
+- **Terminal 2 (frontend):** `npx expo start`
+
 ### Tests
 
 - Actualmente no hay scripts de tests automatizados (`test`) en ninguno de los dos `package.json`.
@@ -141,6 +146,13 @@
 - Mensajería UX en español (principalmente es-MX).
 
 ## 7) Qué está en progreso / incompleto actualmente
+
+### Completado (2026-02-20)
+
+- ✅ Auto-envío de voz al terminar transcripción: el mensaje transcrito se envía automáticamente al coach sin paso manual adicional.
+- ✅ Persistencia de voz seleccionada: la voz TTS elegida por el usuario se guarda en AsyncStorage bajo la llave `wr_coach_voice_v1` y se restaura entre sesiones.
+
+### Pendiente
 
 - Tabs placeholder:
   - `app/(tabs)/insights.tsx`
