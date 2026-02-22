@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Device from 'expo-device';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, Text, View } from 'react-native';
 import type { UnlockedAchievement } from '../../constants/achievements';
 import { getAchievements } from '../../lib/achievements';
 import { useWRTheme } from '../../theme/theme';
@@ -59,6 +60,7 @@ const STORAGE_SMART_LAST_ID = 'wr_notif_smart_last_id_v1';
 
 const STORAGE_MODE = 'wr_mode_v1';
 const STORAGE_PROFILE = 'wr_profile_v1';
+const STORAGE_PROGRESS_PHOTOS = 'wr_progress_photos_v1';
 
 type UserProfile = {
   nombre?: string;
@@ -66,6 +68,11 @@ type UserProfile = {
   sexo?: 'hombre' | 'mujer' | 'otro' | string;
   altura_cm?: number;
   peso_kg?: number;
+};
+type ProgressPhoto = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  uri: string;
 };
 type PlanMode = 'agresiva' | 'balance' | 'mantenimiento';
 
@@ -364,6 +371,206 @@ async function scheduleSmartTomorrow(hour: number, minute: number) {
   return { scheduled: true as const, risk, label, target, id };
 }
 
+function formatPhotoDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const SLIDER_HEIGHT = 240;
+
+function BeforeAfterSlider({
+  older,
+  newer,
+  colors,
+}: {
+  older: ProgressPhoto;
+  newer: ProgressPhoto;
+  colors: typeof DEFAULT_COLORS;
+}) {
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerWidthRef = useRef(0);
+  const currentDividerX  = useRef(0);
+  const dragStartX       = useRef(0);
+
+  const dividerAnim = useRef(new Animated.Value(0)).current;
+  const negDivider  = useRef(Animated.multiply(dividerAnim, -1)).current;
+  const dividerLine = useRef(Animated.subtract(dividerAnim, 1)).current;
+  const handleLeft  = useRef(Animated.subtract(dividerAnim, 22)).current;
+
+  const onLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const w = e.nativeEvent.layout.width;
+      if (w === containerWidthRef.current) return;
+      containerWidthRef.current = w;
+      setContainerWidth(w);
+      const half = w / 2;
+      currentDividerX.current = half;
+      dragStartX.current      = half;
+      dividerAnim.setValue(half);
+    },
+    [dividerAnim],
+  );
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      // Only claim horizontal movement so vertical scroll still works
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderGrant: () => {
+        dragStartX.current = currentDividerX.current;
+      },
+      onPanResponderMove: (_, gs) => {
+        const w    = containerWidthRef.current;
+        const newX = Math.max(0, Math.min(w, dragStartX.current + gs.dx));
+        dividerAnim.setValue(newX);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const w    = containerWidthRef.current;
+        const newX = Math.max(0, Math.min(w, dragStartX.current + gs.dx));
+        currentDividerX.current = newX;
+        dividerAnim.setValue(newX);
+      },
+    }),
+  ).current;
+
+  return (
+    <View>
+      {/* Slider canvas */}
+      <View
+        onLayout={onLayout}
+        style={{
+          height: SLIDER_HEIGHT,
+          borderRadius: 14,
+          overflow: 'hidden',
+          backgroundColor: colors.card,
+        }}
+        {...panResponder.panHandlers}
+      >
+        {containerWidth > 0 && (
+          <>
+            {/* ── Before: older photo, full width beneath ── */}
+            <Image
+              source={{ uri: older.uri }}
+              style={{ position: 'absolute', width: containerWidth, height: SLIDER_HEIGHT }}
+              resizeMode="cover"
+            />
+
+            {/* ── After: newer photo, clipped to right of divider ── */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                left:     dividerAnim,
+                top:      0,
+                right:    0,
+                bottom:   0,
+                overflow: 'hidden',
+              }}
+            >
+              <Animated.View
+                style={{
+                  position:  'absolute',
+                  width:     containerWidth,
+                  height:    SLIDER_HEIGHT,
+                  transform: [{ translateX: negDivider }],
+                }}
+              >
+                <Image
+                  source={{ uri: newer.uri }}
+                  style={{ width: containerWidth, height: SLIDER_HEIGHT }}
+                  resizeMode="cover"
+                />
+              </Animated.View>
+            </Animated.View>
+
+            {/* ── Divider line ── */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position:        'absolute',
+                left:            dividerLine,
+                top:             0,
+                bottom:          0,
+                width:           2,
+                backgroundColor: '#FFFFFF',
+              }}
+            />
+
+            {/* ── Drag handle ── */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position:        'absolute',
+                left:            handleLeft,
+                top:             SLIDER_HEIGHT / 2 - 22,
+                width:           44,
+                height:          44,
+                borderRadius:    22,
+                backgroundColor: '#FFFFFF',
+                alignItems:      'center',
+                justifyContent:  'center',
+                shadowColor:     '#000',
+                shadowOpacity:   0.35,
+                shadowRadius:    6,
+                shadowOffset:    { width: 0, height: 2 },
+                elevation:       5,
+              }}
+            >
+              <Text style={{ color: '#333333', fontSize: 14, fontWeight: '900' }}>↔</Text>
+            </Animated.View>
+
+            {/* ── INICIO label (top-left) ── */}
+            <View
+              pointerEvents="none"
+              style={{
+                position:        'absolute',
+                top:             10,
+                left:            10,
+                backgroundColor: 'rgba(0,0,0,0.60)',
+                borderRadius:    8,
+                paddingHorizontal: 8,
+                paddingVertical:   4,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>
+                INICIO
+              </Text>
+            </View>
+
+            {/* ── AHORA label (top-right) ── */}
+            <View
+              pointerEvents="none"
+              style={{
+                position:        'absolute',
+                top:             10,
+                right:           10,
+                backgroundColor: 'rgba(0,0,0,0.60)',
+                borderRadius:    8,
+                paddingHorizontal: 8,
+                paddingVertical:   4,
+              }}
+            >
+              <Text style={{ color: '#E7C66B', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>
+                AHORA
+              </Text>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* ── Dates row ── */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>
+          {formatPhotoDate(older.date)}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>
+          {formatPhotoDate(newer.date)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const { theme } = useWRTheme();
   const colors = theme?.colors ?? DEFAULT_COLORS;
@@ -404,6 +611,7 @@ export default function PerfilScreen() {
 
   const [scheduledCount, setScheduledCount] = useState<number>(0);
   const [achievements, setAchievements] = useState<UnlockedAchievement[]>([]);
+  const [progressPhotos, setProgressPhotos] = useState<ProgressPhoto[]>([]);
 
   const timeLabel = useMemo(() => fmtTime(hour, minute), [hour, minute]);
 
@@ -466,6 +674,14 @@ export default function PerfilScreen() {
       setAchievements(Array.isArray(list) ? (list as UnlockedAchievement[]) : []);
     } catch {
       setAchievements([]);
+    }
+
+    try {
+      const rawPhotos = await AsyncStorage.getItem(STORAGE_PROGRESS_PHOTOS);
+      const photos: ProgressPhoto[] = rawPhotos ? JSON.parse(rawPhotos) : [];
+      setProgressPhotos(Array.isArray(photos) ? photos : []);
+    } catch {
+      setProgressPhotos([]);
     }
   }, [refreshScheduledCount]);
 
@@ -634,6 +850,44 @@ export default function PerfilScreen() {
     return n || null;
   }, [profile]);
 
+  const addProgressPhoto = useCallback(async (source: 'camera' | 'gallery') => {
+    let result: ImagePicker.ImagePickerResult;
+    if (source === 'camera') {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permiso denegado', 'Activa el acceso a la cámara en Ajustes.');
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permiso denegado', 'Activa el acceso a la galería en Ajustes.');
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+    }
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+    const uri = result.assets[0].uri;
+    const today = isoDateKey();
+    const newPhoto: ProgressPhoto = { id: `pp_${Date.now()}`, date: today, uri };
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_PROGRESS_PHOTOS);
+      const arr: ProgressPhoto[] = raw ? JSON.parse(raw) : [];
+      arr.push(newPhoto);
+      await AsyncStorage.setItem(STORAGE_PROGRESS_PHOTOS, JSON.stringify(arr));
+      setProgressPhotos(arr);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const sliderPhotos = useMemo(() => {
+    if (progressPhotos.length < 2) return null;
+    const sorted = [...progressPhotos].sort((a, b) => a.date.localeCompare(b.date));
+    return { older: sorted[0], newer: sorted[sorted.length - 1] };
+  }, [progressPhotos]);
+
   return (
     <Screen
       scroll
@@ -672,6 +926,64 @@ export default function PerfilScreen() {
         <Text style={{ marginTop: 10, color: colors.muted, fontSize: 12 }}>
           Tip: tu nombre se usará para que el Coach te hable de forma más personal.
         </Text>
+      </View>
+
+      {/* Fotos de progreso */}
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>📷 Fotos de progreso</Text>
+        <Text style={{ marginTop: 6, color: colors.muted }}>Registra tu transformación semana a semana.</Text>
+
+        <View style={{ marginTop: 10, padding: 10, borderRadius: radius.sm, backgroundColor: `${colors.accent2}15`, borderWidth: 1, borderColor: `${colors.accent2}40` }}>
+          <Text style={{ color: colors.accent2, fontWeight: '700', fontSize: 12 }}>🔒 Tus fotos nunca salen de tu teléfono. Solo se guardan localmente.</Text>
+        </View>
+
+        <View style={{ marginTop: 12, flexDirection: 'row', gap: 10 }}>
+          <Pressable
+            onPress={() => addProgressPhoto('camera')}
+            style={({ pressed }) => ({
+              flex: 1, padding: 12, borderRadius: radius.sm, alignItems: 'center',
+              backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1,
+            })}
+          >
+            <Text style={{ fontWeight: '900', color: '#0B0F14' }}>📸 Cámara</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => addProgressPhoto('gallery')}
+            style={({ pressed }) => ({
+              flex: 1, padding: 12, borderRadius: radius.sm, alignItems: 'center',
+              backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+              opacity: pressed ? 0.88 : 1,
+            })}
+          >
+            <Text style={{ fontWeight: '900', color: colors.text }}>🖼 Galería</Text>
+          </Pressable>
+        </View>
+
+        {sliderPhotos ? (
+          <View style={{ marginTop: 14 }}>
+            <BeforeAfterSlider
+              key={`${sliderPhotos.older.id}-${sliderPhotos.newer.id}`}
+              older={sliderPhotos.older}
+              newer={sliderPhotos.newer}
+              colors={colors}
+            />
+          </View>
+        ) : progressPhotos.length === 1 ? (
+          <View style={{ marginTop: 12 }}>
+            <Image
+              source={{ uri: progressPhotos[0].uri }}
+              style={{ width: 100, height: 130, borderRadius: 12, backgroundColor: colors.border }}
+              resizeMode="cover"
+            />
+            <Text style={{ marginTop: 10, color: colors.muted, fontSize: 13, lineHeight: 20 }}>
+              📅 Agrega tu próxima foto en una semana para ver tu progreso.
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ marginTop: 12, color: colors.muted, fontSize: 13 }}>
+            Aún no hay fotos. Toma tu primera foto de progreso.
+          </Text>
+        )}
       </View>
 
       <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card }}>

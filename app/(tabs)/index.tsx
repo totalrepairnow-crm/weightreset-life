@@ -645,7 +645,8 @@ function Chip(props: ChipProps) {
 
 type MoodCircleItemType = {
   label: string;
-  color: string;
+  color: string;      // lighter end (main circle base)
+  fromColor: string;  // darker end (bottom-left gradient overlay)
   energy: 'high' | 'low';
   valence: 'pleasant' | 'unpleasant';
 };
@@ -654,9 +655,6 @@ function MoodCircleCard({
   item,
   isSelected,
   cardWidth,
-  radius,
-  spacing,
-  colors,
   onPress,
 }: {
   item: MoodCircleItemType;
@@ -668,15 +666,16 @@ function MoodCircleCard({
   onPress: () => void;
 }) {
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
-  const circleSize = Math.min(92, Math.max(68, Math.floor(cardWidth * 0.45)));
+  const circleSize = cardWidth;
 
   return (
     <Animated.View style={{ width: cardWidth, transform: [{ scale: scaleAnim }] }}>
+      {/* Pressable carries the shadow — no overflow:hidden so glow is visible */}
       <Pressable
         onPress={onPress}
         onPressIn={() => {
           Animated.spring(scaleAnim, {
-            toValue: 0.92,
+            toValue: 0.93,
             useNativeDriver: true,
             tension: 300,
             friction: 20,
@@ -691,57 +690,87 @@ function MoodCircleCard({
           }).start();
         }}
         style={{
-          borderRadius: radius.md,
-          padding: spacing.md,
-          backgroundColor: colors.surface,
-          borderWidth: isSelected ? 1.5 : 1,
-          borderColor: isSelected ? item.color + 'AA' : colors.border,
-          alignItems: 'center',
+          width: circleSize,
+          height: circleSize,
+          borderRadius: circleSize / 2,
+          // Shadow/glow lives here (no overflow:hidden = glow visible outside)
+          shadowColor: item.color,
+          shadowOpacity: isSelected ? 0.80 : 0.35,
+          shadowRadius: isSelected ? 24 : 10,
+          shadowOffset: { width: 0, height: 6 },
         }}
       >
-        {/* Circle with pseudo-radial gradient + glow */}
+        {/* Inner circle: overflow:hidden clips the gradient overlays */}
         <View
           style={{
-            width: circleSize,
-            height: circleSize,
+            width: '100%',
+            height: '100%',
             borderRadius: circleSize / 2,
             backgroundColor: item.color,
+            overflow: 'hidden',
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: item.color,
-            shadowOpacity: isSelected ? 0.75 : 0.45,
-            shadowRadius: isSelected ? 18 : 10,
-            shadowOffset: { width: 0, height: 2 },
+            borderWidth: isSelected ? 3.5 : 0,
+            borderColor: 'rgba(255,255,255,0.65)',
           }}
         >
-          {/* Top-left highlight — simulates radial gradient (más saturado al centro) */}
+          {/* Gradient layer 1: darker fromColor at bottom-left */}
           <View
             style={{
               position: 'absolute',
-              width: circleSize * 0.44,
-              height: circleSize * 0.44,
-              borderRadius: 999,
-              backgroundColor: 'rgba(255,255,255,0.30)',
-              top: circleSize * 0.07,
-              left: circleSize * 0.09,
+              width: circleSize * 0.80,
+              height: circleSize * 0.80,
+              borderRadius: circleSize,
+              backgroundColor: item.fromColor,
+              opacity: 0.42,
+              bottom: -circleSize * 0.18,
+              left: -circleSize * 0.18,
             }}
           />
-        </View>
+          {/* Gradient layer 2: white highlight at top-right */}
+          <View
+            style={{
+              position: 'absolute',
+              width: circleSize * 0.46,
+              height: circleSize * 0.46,
+              borderRadius: circleSize,
+              backgroundColor: '#FFFFFF',
+              opacity: 0.24,
+              top: circleSize * 0.05,
+              right: circleSize * 0.06,
+            }}
+          />
 
-        <Text
-          numberOfLines={3}
-          style={{
-            marginTop: spacing.md,
-            color: colors.text,
-            fontWeight: '900',
-            textAlign: 'center',
-            maxWidth: '100%',
-            lineHeight: 19,
-            fontSize: 14,
-          }}
-        >
-          {item.label}
-        </Text>
+          {/* Text — black for contrast on all HWF pastel/vivid colors */}
+          <Text
+            numberOfLines={3}
+            style={{
+              color: '#111111',
+              fontWeight: '900',
+              textAlign: 'center',
+              fontSize: 13,
+              lineHeight: 17,
+              paddingHorizontal: Math.round(circleSize * 0.12),
+            }}
+          >
+            {item.label}
+          </Text>
+
+          {/* Selected: small dark dot at bottom-center */}
+          {isSelected && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: circleSize * 0.12,
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: '#111111',
+                opacity: 0.50,
+              }}
+            />
+          )}
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -855,6 +884,24 @@ export default function HoyScreen() {
     return moodGridColumns * moodCardWidth + gaps;
   }, [isExpanded, effectiveWidth, contentMaxWidth, spacing.md, moodCardWidth, moodGridColumns, MOOD_GRID_GAP]);
 
+  // Responsive mood circle sizing based on raw window width:
+  //   < 360px  (fold closed / very narrow): 42%, min 110px
+  //   360–500px (standard phones):           44% of windowWidth
+  //   > 500px  (fold open / tablet):         44%, capped at 220px, to avoid giant circles
+  const moodLayout = useMemo(() => {
+    const w = windowWidth;
+    const CIRCLE_GAP = 8;
+    let circleSize: number;
+    if (w < 360) {
+      circleSize = Math.max(Math.floor(w * 0.42), 110);
+    } else if (w > 500) {
+      circleSize = Math.min(Math.floor(w * 0.44), 220);
+    } else {
+      circleSize = Math.floor(w * 0.44);
+    }
+    return { circleSize, gap: CIRCLE_GAP };
+  }, [windowWidth]);
+
   // DEBUG (one-time): log widths to diagnose Z Fold folded/expanded layout.
   if (!didLogWidthsRef.current && moodContainerWidth > 0) {
     didLogWidthsRef.current = true;
@@ -868,12 +915,13 @@ export default function HoyScreen() {
     });
   }
 
+  // How We Feel–style colors: {color: lighter end, fromColor: darker end}
   const q = {
-    highUnpleasant: colors.danger,
-    highPleasant: colors.warning,
-    lowUnpleasant: '#7B61FF',
-    lowPleasant: colors.success,
-  } as const;
+    highUnpleasant: { color: '#F4724A', fromColor: '#E8453C' }, // coral-red
+    highPleasant:   { color: '#F5C842', fromColor: '#F0A830' }, // golden-yellow
+    lowUnpleasant:  { color: '#A8B8E8', fromColor: '#8B9FD4' }, // soft lavender
+    lowPleasant:    { color: '#6DD88A', fromColor: '#4FC87A' }, // fresh green
+  };
   const [activeWeek, setActiveWeekState] = useState<ActiveWeek | null>(null);
   const [checked, setChecked] = useState<CheckedState>([false, false, false]);
   const [streakDays, setStreakDays] = useState(0);
@@ -1026,10 +1074,10 @@ export default function HoyScreen() {
       </View>
 
       {/* Mood check-in */}
-      <Card>
+      <View style={{ width: '100%', alignSelf: 'stretch', gap: spacing.sm }}>
         <View style={styles.cardHeaderRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>¿Cómo te sientes ahora?</Text>
+            <Text style={[styles.cardTitle, { fontSize: 22, letterSpacing: 0.2 }]}>¿Cómo te sientes ahora?</Text>
             <Text style={styles.cardSubtitle}>{moodSubtitle}</Text>
           </View>
         </View>
@@ -1042,62 +1090,44 @@ export default function HoyScreen() {
         >
           {(() => {
             const items = [
-              { label: 'Alta energía · Desagradable', energy: 'high' as const, valence: 'unpleasant' as const, color: q.highUnpleasant },
-              { label: 'Alta energía · Agradable', energy: 'high' as const, valence: 'pleasant' as const, color: q.highPleasant },
-              { label: 'Baja energía · Desagradable', energy: 'low' as const, valence: 'unpleasant' as const, color: q.lowUnpleasant },
-              { label: 'Baja energía · Agradable', energy: 'low' as const, valence: 'pleasant' as const, color: q.lowPleasant },
+              { label: 'Alta energía · Desagradable', energy: 'high' as const, valence: 'unpleasant' as const, ...q.highUnpleasant },
+              { label: 'Alta energía · Agradable',    energy: 'high' as const, valence: 'pleasant'   as const, ...q.highPleasant },
+              { label: 'Baja energía · Desagradable', energy: 'low'  as const, valence: 'unpleasant' as const, ...q.lowUnpleasant },
+              { label: 'Baja energía · Agradable',    energy: 'low'  as const, valence: 'pleasant'   as const, ...q.lowPleasant },
             ];
 
-            // Build rows deterministically: [0,1], [2,3] for 2 cols; for 3+ cols, slice accordingly.
-            const rows: typeof items[] = [];
-            for (let i = 0; i < items.length; i += moodGridColumns) {
-              rows.push(items.slice(i, i + moodGridColumns));
-            }
-
             return (
-              <View style={{ width: '100%', alignItems: isExpanded ? 'stretch' : 'center' }}>
-                <View
-                  style={{
-                    width: isExpanded ? '100%' : moodGridWidth,
-                    maxWidth: isExpanded ? moodGridWidth : moodGridWidth,
-                    gap: MOOD_GRID_GAP,
-                    alignSelf: isExpanded ? 'stretch' : 'center',
-                  }}
-                >
-                  {rows.map((row, rowIdx) => {
-                    return (
-                      <View
-                        key={`mood-row-${rowIdx}`}
-                        style={{
-                          flexDirection: 'row',
-                          gap: MOOD_GRID_GAP,
-                          justifyContent: isExpanded ? 'flex-start' : 'space-between',
-                          flexWrap: 'nowrap',
-                          alignItems: 'stretch',
-                        }}
-                      >
-                        {row.map((item) => {
-                          const isSelected =
-                            (moodSelected?.energy ?? mood?.energy) === item.energy &&
-                            (moodSelected?.valence ?? mood?.valence) === item.valence;
-
-                          return (
-                            <MoodCircleCard
-                              key={item.label}
-                              item={item}
-                              isSelected={isSelected}
-                              cardWidth={moodCardWidth}
-                              radius={radius}
-                              spacing={spacing}
-                              colors={colors}
-                              onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
-                            />
-                          );
-                        })}
-                      </View>
-                    );
-                  })}
-                </View>
+              <View style={{ width: '100%', alignItems: 'center', gap: moodLayout.gap }}>
+                {([[0, 1], [2, 3]] as const).map((pair, rowIdx) => (
+                  <View
+                    key={`mood-row-${rowIdx}`}
+                    style={{
+                      flexDirection: 'row',
+                      gap: moodLayout.gap,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {pair.map((idx) => {
+                      const item = items[idx];
+                      const isSelected =
+                        (moodSelected?.energy ?? mood?.energy) === item.energy &&
+                        (moodSelected?.valence ?? mood?.valence) === item.valence;
+                      return (
+                        <MoodCircleCard
+                          key={item.label}
+                          item={item}
+                          isSelected={isSelected}
+                          cardWidth={moodLayout.circleSize}
+                          radius={radius}
+                          spacing={spacing}
+                          colors={colors}
+                          onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
+                        />
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
             );
           })()}
@@ -1134,7 +1164,7 @@ export default function HoyScreen() {
         <Text style={{ marginTop: spacing.sm, color: hexToRgba(colors.text, 0.55), fontWeight: '700' }}>
           Esto ayuda al Coach a ajustar tu plan según energía/estrés.
         </Text>
-      </Card>
+      </View>
 
       {/* Today summary */}
       <Card>

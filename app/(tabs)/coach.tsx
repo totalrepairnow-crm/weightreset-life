@@ -5,6 +5,7 @@ import * as Device from "expo-device";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   InteractionManager,
   KeyboardAvoidingView,
   Modal,
@@ -17,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 // Cargar expo-speech de forma segura (evita crash si el dev build aún no lo incluye)
 let Speech: any = null;
@@ -1176,6 +1178,11 @@ export default function CoachScreen() {
   });
 
   const insets = useSafeAreaInsets();
+
+  // TTS speaking orb
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(0.68)).current;
+
   const floatingTabBarHeight = 64;
   const floatingTabBarOffset = Math.max(10, insets.bottom + 8);
   const composerBottomOffset = floatingTabBarHeight + floatingTabBarOffset + 6;
@@ -1662,7 +1669,11 @@ export default function CoachScreen() {
           voice: (overrideVoiceId ?? ttsVoiceIdRef.current) || undefined,
           rate: ttsRate,
           pitch: ttsPitch,
+          onStart: () => setIsSpeaking(true),
+          onDone: () => setIsSpeaking(false),
+          onStopped: () => setIsSpeaking(false),
           onError: () => {
+            setIsSpeaking(false);
             setVoiceError("🔊 No se pudo reproducir voz en este dispositivo/build.");
           },
         });
@@ -1946,6 +1957,23 @@ export default function CoachScreen() {
   useEffect(() => {
     stopRecordingFnRef.current = stopRecording;
   }, [stopRecording]);
+
+  // Pulse animation for TTS speaking orb
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    if (isSpeaking) {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.06, duration: 650, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 0.94, duration: 650, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+    } else {
+      Animated.spring(pulseAnim, { toValue: 0.68, useNativeDriver: true, tension: 150, friction: 14 }).start();
+    }
+    return () => { if (loop) loop.stop(); };
+  }, [isSpeaking, pulseAnim]);
 
   const toggleRecording = useCallback(async () => {
     if (loading) return;
@@ -2443,9 +2471,11 @@ export default function CoachScreen() {
             onPress={toggleRecording}
             disabled={loading || sttStatus === "transcribing"}
           >
-            <Text style={styles.micText}>
-              {sttStatus === "recording" ? "⏹️" : !Audio ? "🚫" : "🎙️"}
-            </Text>
+            <Ionicons
+              name={sttStatus === "recording" ? "stop-circle" : !Audio ? "mic-off" : "mic"}
+              size={22}
+              color={sttStatus === "recording" ? "#EF4444" : "#9CA3AF"}
+            />
           </Pressable>
 
           {sttStatus === "recording" ? (
@@ -2468,6 +2498,7 @@ export default function CoachScreen() {
                   try {
                     Speech?.stop?.();
                   } catch {}
+                  setIsSpeaking(false);
                 }
                 // Persist
                 AsyncStorage.setItem(TTS_ENABLED_KEY, next ? "1" : "0").catch(() => {});
@@ -2476,7 +2507,7 @@ export default function CoachScreen() {
             }}
             disabled={loading}
           >
-            <Text style={styles.speakText}>{speakEnabled ? "🔊" : "🔇"}</Text>
+            <Ionicons name={speakEnabled ? "volume-high" : "volume-mute"} size={20} color={speakEnabled ? "#9CA3AF" : "#6B7280"} />
           </Pressable>
 
           <Pressable
@@ -2494,6 +2525,22 @@ export default function CoachScreen() {
           >
             <Text style={styles.voiceBtnText}>Voz</Text>
           </Pressable>
+
+          {/* TTS speaking orb — always visible, pulses when coach is speaking */}
+          <Animated.View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#E7C66B",
+              transform: [{ scale: pulseAnim }],
+              shadowColor: "#E7C66B",
+              shadowOpacity: isSpeaking ? 0.8 : 0,
+              shadowRadius: 14,
+              shadowOffset: { width: 0, height: 0 },
+              alignSelf: "center",
+            }}
+          />
 
           <TextInput
             value={input}

@@ -295,6 +295,12 @@ function monthMatrix(year: number, month: number) {
 type InsightTone = 'good' | 'warn' | 'bad';
 type RecTarget = 'sleep' | 'move' | 'stress' | 'cravings' | 'none';
 
+type InsightMetric = {
+  icon: string;
+  value: string;
+  label: string;
+};
+
 type Insight = {
   key: string;
   icon: string;
@@ -303,6 +309,7 @@ type Insight = {
   ready: boolean;
   tone?: InsightTone;
   recTarget?: RecTarget;
+  metrics?: InsightMetric[];
 };
 
 
@@ -356,64 +363,127 @@ export default function ProgresoScreen() {
     insight: Insight;
     onMarkAction?: () => void;
   }) {
-    const bg =
-      insight.tone === 'bad'
-        ? 'rgba(239, 68, 68, 0.12)'
-        : insight.tone === 'warn'
-          ? 'rgba(245, 158, 11, 0.12)'
-          : insight.tone === 'good'
-            ? 'rgba(34, 197, 94, 0.12)'
-            : COLORS.card;
+    // ── "Riesgo de antojos" — color accent card with thick left strip ──
+    if (insight.key === 'cravings_risk') {
+      const accentColor =
+        insight.tone === 'bad'  ? COLORS.danger  :
+        insight.tone === 'warn' ? COLORS.warning :
+        COLORS.success;
+      const accentBg =
+        insight.tone === 'bad'  ? 'rgba(239,68,68,0.09)'  :
+        insight.tone === 'warn' ? 'rgba(245,158,11,0.09)' :
+        'rgba(34,197,94,0.09)';
+      const accentBorder =
+        insight.tone === 'bad'  ? 'rgba(239,68,68,0.30)'  :
+        insight.tone === 'warn' ? 'rgba(245,158,11,0.30)' :
+        'rgba(34,197,94,0.30)';
 
-    const border =
-      insight.tone === 'bad'
-        ? 'rgba(239, 68, 68, 0.35)'
-        : insight.tone === 'warn'
-          ? 'rgba(245, 158, 11, 0.35)'
-          : insight.tone === 'good'
-            ? 'rgba(34, 197, 94, 0.35)'
-            : COLORS.border;
-
-    return (
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: border,
-          borderRadius: 16,
-          padding: 12,
-          backgroundColor: bg,
-          marginTop: 10,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <WRText style={{ fontSize: 18 }}>{insight.icon}</WRText>
-          <WRText style={{ flex: 1, color: COLORS.text, fontWeight: '900' }}>{insight.title}</WRText>
+      return (
+        <View style={{ borderRadius: 16, marginTop: 12, overflow: 'hidden', borderWidth: 1, borderColor: accentBorder, backgroundColor: accentBg }}>
+          {/* Thick left accent strip */}
+          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: accentColor }} />
+          <View style={{ padding: 14, paddingLeft: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <WRText style={{ fontSize: 30 }}>{insight.icon}</WRText>
+              <View style={{ flex: 1 }}>
+                <WRText style={{ color: COLORS.text, fontWeight: '900', fontSize: 15 }}>{insight.title}</WRText>
+                <WRText style={{ color: accentColor, fontWeight: '700', fontSize: 11, marginTop: 2 }}>
+                  Basado en tu último check-in
+                </WRText>
+              </View>
+            </View>
+            <WRText style={{ marginTop: 10, color: COLORS.text, fontWeight: '700', lineHeight: 20, fontSize: 14 }}>
+              {insight.text}
+            </WRText>
+          </View>
         </View>
+      );
+    }
 
-        <WRText style={{ marginTop: 8, color: insight.ready ? COLORS.text : COLORS.muted, fontWeight: '700' }}>
+    // ── "Promedios" — 2×2 metric mini-cards grid ──
+    if (insight.key === 'summary_7_30' && insight.metrics?.length) {
+      return (
+        <View style={{ borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card, padding: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <WRText style={{ fontSize: 20 }}>{insight.icon}</WRText>
+            <WRText style={{ flex: 1, color: COLORS.text, fontWeight: '900', fontSize: 15 }}>{insight.title}</WRText>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {insight.metrics.map((m) => (
+              <View
+                key={m.label}
+                style={{
+                  flex: 1,
+                  minWidth: '44%',
+                  backgroundColor: COLORS.surface,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  padding: 14,
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <WRText style={{ fontSize: 22 }}>{m.icon}</WRText>
+                <WRText style={{ fontSize: 24, fontWeight: '900', color: COLORS.text }}>{m.value}</WRText>
+                <WRText style={{ fontSize: 11, color: COLORS.muted, fontWeight: '700', textAlign: 'center' }}>{m.label}</WRText>
+              </View>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    // ── "Tu mejor siguiente paso" — gold accent card ──
+    if (insight.key === 'recommendation') {
+      return (
+        <View style={{ borderRadius: 16, marginTop: 12, overflow: 'hidden', borderWidth: 1, borderColor: `${COLORS.orange}45`, backgroundColor: `${COLORS.orange}0E` }}>
+          {/* Gold left accent strip */}
+          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: COLORS.orange }} />
+          <View style={{ padding: 14, paddingLeft: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <WRText style={{ fontSize: 24 }}>{insight.icon}</WRText>
+              <WRText style={{ flex: 1, color: COLORS.text, fontWeight: '900', fontSize: 15 }}>{insight.title}</WRText>
+            </View>
+            <WRText style={{ marginTop: 10, color: COLORS.text, fontWeight: '700', lineHeight: 20, fontSize: 14 }}>
+              {insight.text}
+            </WRText>
+            {insight.ready && onMarkAction ? (
+              <Pressable
+                onPress={onMarkAction}
+                style={({ pressed }) => ({
+                  marginTop: 14,
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  backgroundColor: COLORS.orange,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.88 : 1,
+                })}
+              >
+                <WRText style={{ fontWeight: '900', color: '#0B0F14', fontSize: 14 }}>Marcar 1 acción hoy</WRText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      );
+    }
+
+    // ── Patrón principal (y default) — icon badge + texto legible ──
+    return (
+      <View style={{ borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card, padding: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}>
+            <WRText style={{ fontSize: 24 }}>{insight.icon}</WRText>
+          </View>
+          <WRText style={{ flex: 1, color: COLORS.text, fontWeight: '900', fontSize: 15 }}>{insight.title}</WRText>
+        </View>
+        <WRText style={{ marginTop: 10, color: insight.ready ? COLORS.text : COLORS.muted, fontWeight: '700', lineHeight: 20, fontSize: 14 }}>
           {insight.text}
         </WRText>
-
         {!insight.ready ? (
-          <WRText style={{ marginTop: 6, color: COLORS.muted, fontSize: 12 }}>
+          <WRText style={{ marginTop: 8, color: COLORS.muted, fontSize: 12, lineHeight: 18 }}>
             Tip: registra más días variados para activar este insight.
           </WRText>
-        ) : null}
-
-        {insight.key === 'recommendation' && insight.ready && onMarkAction ? (
-          <Pressable
-            onPress={onMarkAction}
-            style={{
-              marginTop: 10,
-              paddingVertical: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: COLORS.border,
-              backgroundColor: COLORS.card,
-            }}
-          >
-            <WRText style={{ textAlign: 'center', fontWeight: '900', color: COLORS.text }}>Marcar 1 acción hoy</WRText>
-          </Pressable>
         ) : null}
       </View>
     );
@@ -608,6 +678,12 @@ export default function ProgresoScreen() {
       icon: '📊',
       title: 'Promedios (7 vs 30 días)',
       ready: true,
+      metrics: [
+        { icon: '⭐', label: 'Score 7 días',   value: String(Math.round(s7.score)) },
+        { icon: '😴', label: 'Sueño prom.',    value: `${s7.sleep.toFixed(1)}h` },
+        { icon: '🏃', label: 'Movimiento',     value: `${Math.round(s7.move)}m` },
+        { icon: '✅', label: 'Días completos', value: `${s7.complete}%` },
+      ],
       text:
         `7 días: score ${Math.round(s7.score)} · sueño ${s7.sleep.toFixed(1)}h · estrés ${s7.stress.toFixed(1)} · antojos ${s7.cravings.toFixed(1)} · mov ${Math.round(s7.move)}m · completos ${s7.complete}%` +
         (n7
@@ -802,7 +878,7 @@ export default function ProgresoScreen() {
   );
 
   return (
-    <Screen scroll contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}>
+    <Screen scroll contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.xs }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
           <WRText style={{ fontSize: 30, fontWeight: '900', color: COLORS.text }}>Progreso</WRText>
