@@ -17,6 +17,7 @@ import {
   MealEntry,
   todayKey,
 } from '../../lib/food';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useWRTheme } from '../../theme/theme';
 import Screen from '../../ui/Screen';
 
@@ -688,13 +689,55 @@ export default function ComidasScreen() {
         </Text>
       </View>
 
-      <Button disabled={busy} label="📸 Tomar foto de comida" onPress={() => addFromPhoto('camera')} />
-      <Button disabled={busy} variant="secondary" label="🖼️ Elegir foto de comida (galería)" onPress={() => addFromPhoto('library')} />
-      <Button disabled={busy} variant="secondary" label="🏷️ Tomar foto de etiqueta" onPress={() => addFromLabel('camera')} />
-      <Button disabled={busy} variant="secondary" label="🖼️ Elegir etiqueta (galería)" onPress={() => addFromLabel('library')} />
+      {/* Botón principal — gradiente dorado */}
+      <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
+        <Pressable
+          disabled={busy}
+          onPress={() => addFromPhoto('camera')}
+          style={({ pressed }) => ({ opacity: busy ? 0.55 : pressed ? 0.88 : 1 })}
+        >
+          <LinearGradient
+            colors={['#F8EA9E', '#E7C66B', '#C9A43C']}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={{ paddingVertical: 20, paddingHorizontal: spacing.lg, alignItems: 'center', gap: 4 }}
+          >
+            <Text style={{ color: '#3A2800', fontWeight: '900', fontSize: 17 }}>📸 Tomar foto de comida</Text>
+            <Text style={{ color: '#5C3F00', fontWeight: '700', fontSize: 12 }}>Analiza tus macros con IA</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.kpiTitle}>🔢 Barcode / UPC</Text>
+      {/* Botones secundarios — ícono izquierda + borde sutil */}
+      {[
+        { icon: '🖼️', label: 'Galería — comida', action: () => addFromPhoto('library') },
+        { icon: '🏷️', label: 'Foto de etiqueta nutricional', action: () => addFromLabel('camera') },
+        { icon: '🖼️', label: 'Galería — etiqueta', action: () => addFromLabel('library') },
+      ].map(({ icon, label, action }) => (
+        <Pressable
+          key={label}
+          disabled={busy}
+          onPress={action}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            backgroundColor: colors.card,
+            paddingVertical: 13,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: busy ? 0.55 : pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 18 }}>{icon}</Text>
+          <Text style={{ color: colors.text, fontWeight: '900', flex: 1 }}>{label}</Text>
+        </Pressable>
+      ))}
+
+      <View style={[styles.card, { borderColor: colors.accent2 + '55', borderWidth: 1.5 }]}>
+        <Text style={[styles.kpiTitle, { color: colors.accent2 }]}>📷 Barcode / UPC</Text>
 
         <Button
           variant="secondary"

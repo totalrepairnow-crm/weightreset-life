@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWRTheme } from "../../theme/theme";
 
@@ -55,78 +55,51 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
 
-        // Reduce visual noise: show label only for the focused tab.
-        tabBarShowLabel: true,
-        tabBarLabel: ({ focused, color, children }) => {
-          if (!focused) return null;
-          const label = typeof children === "string" ? children : "";
-          return (
-            <View style={{ marginTop: 2 }}>
-              <Text style={{ color, fontWeight: "900", fontSize: 11 }}>{label}</Text>
-            </View>
-          );
-        },
+        tabBarShowLabel: false,
 
-        // Typography
-        tabBarLabelStyle: {
-          fontWeight: "900",
-          fontSize: 11,
-          marginTop: 2,
-        },
-
-        // Floating premium bar: rounded, inset, softer border.
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopWidth: 0,
 
           position: "absolute",
-          left: 12,
-          right: 12,
-          bottom: Math.max(10, insets.bottom + 8),
+          left: 14,
+          right: 14,
+          bottom: Math.max(12, insets.bottom + 8),
 
-          height: 64,
-          paddingTop: 8,
-          paddingBottom: 8,
+          height: 62,
 
-          borderRadius: 20,
+          borderRadius: 22,
           borderWidth: 1,
           borderColor: colors.border,
 
           shadowColor: "#000",
-          shadowOpacity: 0.22,
-          shadowRadius: 14,
+          shadowOpacity: 0.35,
+          shadowRadius: 20,
           shadowOffset: { width: 0, height: 8 },
-          elevation: 14,
+          elevation: 18,
         },
 
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingTop: 4,
+          paddingBottom: 8,
         },
 
-        tabBarIcon: ({ color, size, focused }) => {
+        tabBarIcon: ({ color, focused }) => {
           const key = route.name;
           const def = ICONS[key] ?? { active: "ellipse", inactive: "ellipse-outline" };
           const iconName = focused ? def.active : def.inactive;
 
-          const iconSize = Math.max(22, size);
-
           return (
-            <View style={{ alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name={iconName} size={iconSize} color={color} />
-              {focused ? (
-                <View
-                  style={{
-                    marginTop: 6,
-                    width: 16,
-                    height: 2,
-                    borderRadius: 999,
-                    backgroundColor: colors.primary,
-                    opacity: 0.8,
-                  }}
-                />
-              ) : (
-                <View style={{ marginTop: 6, width: 18, height: 3, borderRadius: 999, opacity: 0 }} />
-              )}
+            <View style={{ alignItems: "center", justifyContent: "center", gap: 5 }}>
+              <Ionicons name={iconName} size={26} color={color} />
+              <View
+                style={{
+                  width: focused ? 5 : 0,
+                  height: 5,
+                  borderRadius: 999,
+                  backgroundColor: colors.primary,
+                }}
+              />
             </View>
           );
         },

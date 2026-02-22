@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useWRTheme } from '../../theme/theme';
 import Button from '../../ui/Button';
 import Card from '../../ui/Card';
@@ -643,6 +643,110 @@ function Chip(props: ChipProps) {
   );
 }
 
+type MoodCircleItemType = {
+  label: string;
+  color: string;
+  energy: 'high' | 'low';
+  valence: 'pleasant' | 'unpleasant';
+};
+
+function MoodCircleCard({
+  item,
+  isSelected,
+  cardWidth,
+  radius,
+  spacing,
+  colors,
+  onPress,
+}: {
+  item: MoodCircleItemType;
+  isSelected: boolean;
+  cardWidth: number;
+  radius: typeof DEFAULT_RADIUS;
+  spacing: typeof DEFAULT_SPACING;
+  colors: typeof DEFAULT_COLORS;
+  onPress: () => void;
+}) {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const circleSize = Math.min(92, Math.max(68, Math.floor(cardWidth * 0.45)));
+
+  return (
+    <Animated.View style={{ width: cardWidth, transform: [{ scale: scaleAnim }] }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => {
+          Animated.spring(scaleAnim, {
+            toValue: 0.92,
+            useNativeDriver: true,
+            tension: 300,
+            friction: 20,
+          }).start();
+        }}
+        onPressOut={() => {
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 7,
+          }).start();
+        }}
+        style={{
+          borderRadius: radius.md,
+          padding: spacing.md,
+          backgroundColor: colors.surface,
+          borderWidth: isSelected ? 1.5 : 1,
+          borderColor: isSelected ? item.color + 'AA' : colors.border,
+          alignItems: 'center',
+        }}
+      >
+        {/* Circle with pseudo-radial gradient + glow */}
+        <View
+          style={{
+            width: circleSize,
+            height: circleSize,
+            borderRadius: circleSize / 2,
+            backgroundColor: item.color,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: item.color,
+            shadowOpacity: isSelected ? 0.75 : 0.45,
+            shadowRadius: isSelected ? 18 : 10,
+            shadowOffset: { width: 0, height: 2 },
+          }}
+        >
+          {/* Top-left highlight — simulates radial gradient (más saturado al centro) */}
+          <View
+            style={{
+              position: 'absolute',
+              width: circleSize * 0.44,
+              height: circleSize * 0.44,
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,255,255,0.30)',
+              top: circleSize * 0.07,
+              left: circleSize * 0.09,
+            }}
+          />
+        </View>
+
+        <Text
+          numberOfLines={3}
+          style={{
+            marginTop: spacing.md,
+            color: colors.text,
+            fontWeight: '900',
+            textAlign: 'center',
+            maxWidth: '100%',
+            lineHeight: 19,
+            fontSize: 14,
+          }}
+        >
+          {item.label}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function HoyScreen() {
   const ctx = useWRTheme();
   const theme = ctx?.theme;
@@ -978,43 +1082,16 @@ export default function HoyScreen() {
                             (moodSelected?.valence ?? mood?.valence) === item.valence;
 
                           return (
-                            <Pressable
+                            <MoodCircleCard
                               key={item.label}
+                              item={item}
+                              isSelected={isSelected}
+                              cardWidth={moodCardWidth}
+                              radius={radius}
+                              spacing={spacing}
+                              colors={colors}
                               onPress={() => setMoodSelected({ energy: item.energy, valence: item.valence })}
-                              style={{
-                                width: moodCardWidth,
-                                borderRadius: radius.md,
-                                padding: spacing.md,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: isSelected ? hexToRgba(colors.text, 0.25) : colors.border,
-                                alignItems: 'center',
-                              }}
-                            >
-                              <View
-                                style={{
-                                  width: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                  height: Math.min(92, Math.max(68, Math.floor(moodCardWidth * 0.45))),
-                                  borderRadius: 999,
-                                  backgroundColor: item.color,
-                                  opacity: 0.95,
-                                }}
-                              />
-                              <Text
-                                numberOfLines={3}
-                                style={{
-                                  marginTop: spacing.md,
-                                  color: colors.text,
-                                  fontWeight: '900',
-                                  textAlign: 'center',
-                                  maxWidth: '100%',
-                                  lineHeight: 19,
-                                  fontSize: 14,
-                                }}
-                              >
-                                {item.label}
-                              </Text>
-                            </Pressable>
+                            />
                           );
                         })}
                       </View>
