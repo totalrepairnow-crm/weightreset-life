@@ -17,7 +17,6 @@ import {
   MealEntry,
   todayKey,
 } from '../../lib/food';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useWRTheme } from '../../theme/theme';
 import Screen from '../../ui/Screen';
 
@@ -689,24 +688,23 @@ export default function ComidasScreen() {
         </Text>
       </View>
 
-      {/* Botón principal — gradiente dorado */}
-      <View style={{ borderRadius: radius.md, overflow: 'hidden' }}>
-        <Pressable
-          disabled={busy}
-          onPress={() => addFromPhoto('camera')}
-          style={({ pressed }) => ({ opacity: busy ? 0.55 : pressed ? 0.88 : 1 })}
-        >
-          <LinearGradient
-            colors={['#F8EA9E', '#E7C66B', '#C9A43C']}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={{ paddingVertical: 20, paddingHorizontal: spacing.lg, alignItems: 'center', gap: 4 }}
-          >
-            <Text style={{ color: '#3A2800', fontWeight: '900', fontSize: 17 }}>📸 Tomar foto de comida</Text>
-            <Text style={{ color: '#5C3F00', fontWeight: '700', fontSize: 12 }}>Analiza tus macros con IA</Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
+      {/* Botón principal — sólido dorado */}
+      <Pressable
+        disabled={busy}
+        onPress={() => addFromPhoto('camera')}
+        style={({ pressed }) => ({
+          backgroundColor: colors.primary,
+          borderRadius: radius.md,
+          paddingVertical: 20,
+          paddingHorizontal: spacing.lg,
+          alignItems: 'center',
+          gap: 4,
+          opacity: busy ? 0.55 : pressed ? 0.88 : 1,
+        })}
+      >
+        <Text style={{ color: '#0B0F14', fontWeight: '900', fontSize: 17 }}>📸 Tomar foto de comida</Text>
+        <Text style={{ color: '#3A2800', fontWeight: '700', fontSize: 12 }}>Analiza tus macros con IA</Text>
+      </Pressable>
 
       {/* Botones secundarios — ícono izquierda + borde sutil */}
       {[

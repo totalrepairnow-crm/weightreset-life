@@ -56,6 +56,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.muted,
 
         tabBarShowLabel: false,
+        tabBarLabel: () => null,
 
         tabBarStyle: {
           backgroundColor: colors.surface,

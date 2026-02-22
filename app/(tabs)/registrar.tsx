@@ -227,15 +227,17 @@ function Chip({
   return (
     <Pressable
       onPress={onPress}
-      style={[
+      style={({ pressed }) => [
         styles.chip,
         {
           borderColor: active ? colors.primary : colors.border,
-          backgroundColor: active ? `${colors.primary}22` : colors.card,
+          borderWidth: active ? 1.5 : 1,
+          backgroundColor: active ? `${colors.primary}40` : colors.card,
+          opacity: pressed ? 0.82 : 1,
         },
       ]}
     >
-      <Text style={styles.chipText}>{label}</Text>
+      <Text style={[styles.chipText, { color: active ? colors.primary : colors.text }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -462,22 +464,22 @@ const styles = StyleSheet.create({
   },
   section: {
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 22,
+    marginBottom: 14,
   },
   sectionTitle: {
     fontWeight: '900',
-    fontSize: 16,
+    fontSize: 17,
   },
   chipRow: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
     marginRight: 8,
@@ -485,15 +487,18 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontWeight: '900',
+    fontSize: 14,
   },
   saveButton: {
     marginTop: 6,
-    padding: 14,
-    borderRadius: 14,
+    paddingVertical: 17,
+    paddingHorizontal: 14,
+    borderRadius: 16,
   },
   saveButtonText: {
-    color: 'white',
+    color: '#0B0F14',
     fontWeight: '900',
     textAlign: 'center',
+    fontSize: 16,
   },
 });
